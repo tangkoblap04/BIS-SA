@@ -130,24 +130,24 @@ function CourseQuiz({ role, onComplete }) {
     // แก้ไขส่วนแสดงผลการทดสอบ
     if (showResult) {
     return (
-        <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-4">สรุปผลการทดสอบ</h2>
         <div className="text-center mb-8">
-            <div className="mb-4">
+          <div className="mb-4">
             <span className="text-sm text-gray-600">ตำแหน่ง</span>
             <h3 className="text-xl font-semibold text-gray-800">
-                {getRoleNameThai(role)}
+              {getRoleNameThai(role)}
             </h3>
-            </div>
+          </div>
 
-            <div className="relative inline-block w-48 h-48 mb-6">
+          <div className="relative inline-block w-48 h-48 mb-6">
             <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-5xl font-bold text-blue-600">
+              <div className="text-5xl font-bold text-blue-600">
                 {Math.round(score)}%
-                </div>
+              </div>
             </div>
             <svg className="transform -rotate-90 w-48 h-48">
-                <circle
+              <circle
                 className="text-gray-200"
                 strokeWidth="8"
                 stroke="currentColor"
@@ -155,8 +155,8 @@ function CourseQuiz({ role, onComplete }) {
                 r="70"
                 cx="96"
                 cy="96"
-                />
-                <circle
+              />
+              <circle
                 className="text-blue-600"
                 strokeWidth="8"
                 strokeDasharray={440}
@@ -167,46 +167,36 @@ function CourseQuiz({ role, onComplete }) {
                 r="70"
                 cx="96"
                 cy="96"
-                />
+              />
             </svg>
-            </div>
+          </div>
 
-            <p className="text-gray-600 mb-2">
+          <p className="text-gray-600 mb-2">
             คุณตอบถูก {Math.round((score / 100) * questions.length)} ข้อ 
             จากทั้งหมด {questions.length} ข้อ
-            </p>
+          </p>
 
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <h4 className="font-semibold text-gray-700 mb-2">การประเมินผล</h4>
             <p className="text-gray-600">
-                {score >= 80 ? '🌟 ยอดเยี่ยม! คุณพร้อมสำหรับการทำงานในตำแหน่งนี้' :
-                score >= 60 ? '👍 ดี! แต่ยังมีโอกาสพัฒนาได้อีก' :
-                'ควรทบทวนเนื้อหาและลองทำแบบทดสอบอีกครั้ง'}
+              {score >= 80 ? '🌟 ยอดเยี่ยม! คุณพร้อมสำหรับการทำงานในตำแหน่งนี้' :
+              score >= 60 ? '👍 ดี! แต่ยังมีโอกาสพัฒนาได้อีก' :
+              'ควรทบทวนเนื้อหาและลองทำแบบทดสอบอีกครั้ง'}
             </p>
-            </div>
+          </div>
 
-            <div className="space-y-4">
+          <div className="space-y-4">
             <button
-                onClick={() => {
-                setShowResult(false);
-                setAnswers({});
-
-                }}
-                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => window.location.href = '/written-exam'}
+              className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
-                ทำแบบทดสอบอีกครั้ง
+              ทำข้อสอบข้อเขียน
             </button>
-            <button
-                onClick={() => window.location.href = '/courses'}
-                className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-                กลับไปยังหน้าคอร์ส
-            </button>
-            </div>
+          </div>
         </div>
-        </div>
+      </div>
     );
-    }
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
