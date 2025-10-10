@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authService } from '../services/auth.service';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -8,17 +9,27 @@ export default function Login() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!email || !password) {
       setError('กรุณากรอกอีเมลและรหัสผ่าน');
       return;
     }
     
-    // เก็บสถานะการ login ใน localStorage โดยไม่ตรวจสอบรหัสผ่าน
-    localStorage.setItem('isLoggedIn', 'true');
-    localStorage.setItem('userEmail', email);
-    navigate('/courses');
+    // Temporary login logic for testing
+    if (email === 'hr@example.com' && password === 'hr123456') {
+      const user = { email, role: 'HR', name: 'HR Admin' };
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('token', 'dummy-token');
+      navigate('/hr-dashboard');
+    } else if (email === 'employee@example.com' && password === 'emp123456') {
+      const user = { email, role: 'employee', name: 'Employee User' };
+      localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('token', 'dummy-token');
+      navigate('/courses');
+    } else {
+      setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+    }
   }
 
   return (
@@ -31,7 +42,7 @@ export default function Login() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-300"

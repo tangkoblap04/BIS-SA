@@ -5,7 +5,9 @@ import CourseDetailPage from './pages/CourseDetailPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import WrittenExam from './components/courses/WrittenExam';
 import EmployeeDashboard from './components/dashboard/EmployeeDashboard';
+import HRDashboard from './components/dashboard/HRDashboard';
 import Navbar from './components/common/Navbar';
+import { authService } from './services/auth.service';
 
 function App() {
   return (
@@ -35,8 +37,30 @@ function App() {
                     </ProtectedRoute>
                   } 
                 />
-                <Route path="/written-exam" element={<WrittenExam />} />
-                <Route path="/dashboard" element={<EmployeeDashboard />} />
+                <Route 
+                  path="/written-exam" 
+                  element={
+                    <ProtectedRoute>
+                      <WrittenExam />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    <ProtectedRoute>
+                      <EmployeeDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/hr-dashboard" 
+                  element={
+                    <ProtectedRoute checkRole={() => authService.isHR()}>
+                      <HRDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
               </Routes>
             </>
           }

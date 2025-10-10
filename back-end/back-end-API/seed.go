@@ -7,20 +7,19 @@ import (
 
 func seedUsers(db *sql.DB) error {
     users := []struct {
-        username string
+        email    string
+        name     string
         password string
         role     string
     }{
-        {"admin", "admin123", "admin"},
-        {"waiter1", "pass123", "waiter"},
-        {"cashier1", "pass123", "cashier"},
-        {"manager1", "pass123", "manager"},
+        {"hr@example.com", "HR Admin", "hr123456", "HR"},
+        {"employee@example.com", "Employee User", "emp123456", "employee"},
     }
 
-    query := `INSERT INTO users (username, password, role) VALUES ($1, $2, $3)`
+    query := `INSERT INTO users (email, name, password, role) VALUES ($1, $2, $3, $4)`
     
     for _, user := range users {
-        _, err := db.Exec(query, user.username, user.password, user.role)
+        _, err := db.Exec(query, user.email, user.name, user.password, user.role)
         if err != nil {
             return err
         }

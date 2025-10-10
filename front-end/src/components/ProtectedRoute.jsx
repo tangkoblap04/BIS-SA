@@ -1,10 +1,20 @@
 import { Navigate } from 'react-router-dom';
+import { authService } from '../services/auth.service';
 
-function ProtectedRoute({ children }) {
-  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+function ProtectedRoute({ children, checkRole }) {
+  const user = authService.getCurrentUser();
 
-  if (!isLoggedIn) {
+  if (!user) {
     return <Navigate to="/" replace />;
+  }
+
+  if (checkRole && !checkRole()) {
+    // Redirect to appropriate dashboard based on role
+    if (authService.isHR()) {
+      return <Navigate to="/hr-dashboard" replace />;
+    } else {
+      return <Navigate to="/courses" replace />;
+    }
   }
 
   return children;
