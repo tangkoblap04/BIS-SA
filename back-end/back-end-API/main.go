@@ -7,234 +7,102 @@ import (
     "net/http"
     "os"
     "time"
-    _ "back-end-API/docs"
 
     "github.com/gin-contrib/cors"
     "github.com/gin-gonic/gin"
     _ "github.com/lib/pq"
-    swaggerFiles "github.com/swaggo/files"
-    ginSwagger "github.com/swaggo/gin-swagger"
-    _ "github.com/swaggo/swag"
 )
-
-type ErrorResponse struct {
-    Message string `json:"message"`
-}
 
 var db *sql.DB
 
-// Models
-type User struct {
-    ID        int       `json:"id"`
-    Username  string    `json:"username"`
-    Password  string    `json:"-"` // ไม่แสดงในการ response
-    Role      string    `json:"role"`
-    CreatedAt time.Time `json:"created_at"`
-    UpdatedAt time.Time `json:"updated_at"`
+func getEnv(key, fallback string) string {
+    if value, exists := os.LookupEnv(key); exists {
+        return value
+    }
+    return fallback
 }
 
-type Course struct {
-    ID          int       `json:"id"`
-    Name        string    `json:"name"`
-    Description string    `json:"description"`
-    Role        string    `json:"role"`
-    CreatedAt   time.Time `json:"created_at"`
-    UpdatedAt   time.Time `json:"updated_at"`
-}
-
-type CourseProgress struct {
-    ID          int       `json:"id"`
-    UserID      int       `json:"user_id"`
-    CourseID    int       `json:"course_id"`
-    Progress    float64   `json:"progress"`
-    QuizScore   float64   `json:"quiz_score"`
-    WrittenExam string    `json:"written_exam"`
-    CompletedAt time.Time `json:"completed_at,omitempty"`
-    CreatedAt   time.Time `json:"created_at"`
-    UpdatedAt   time.Time `json:"updated_at"`
-}
-
-// Database initialization
 func initDB() {
-	var err error
-	host := getEnv("DB_HOST", "")
-	name := getEnv("DB_NAME", "")
-	user := getEnv("DB_USER", "")
-	password := getEnv("DB_PASSWORD", "")
-	port := getEnv("DB_PORT", "")
-
-	conSt := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, name)
-
-	db, err = sql.Open("postgres", conSt)
-	if err != nil {
-		log.Fatal("Failed to open database.")
-	}
-
-	//กำหนดจำนวน Connection สูงสุด
-	db.SetMaxOpenConns(25)
-
-	// กำหนดจำนวน Idle connection สูงสุด
-	db.SetMaxIdleConns(20)
-
-	// กำหนดอายุของ Connection
-	db.SetConnMaxLifetime(5 * time.Minute)
-
-	err = db.Ping()
-	if err != nil {
-		log.Fatal("Failed to Ping.", err)
-
-	}
-
-	log.Println("Successfully~~~")
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-// Auth handlers
-func login(c *gin.Context) {
-    var loginData struct {
-        Username string `json:"username"`
-        Password string `json:"password"`
-    }
-
-    if err := c.ShouldBindJSON(&loginData); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
-
-    var user User
-    err := db.QueryRow(
-        "SELECT id, username, role FROM users WHERE username = $1 AND password = $2",
-        loginData.Username, loginData.Password,
-    ).Scan(&user.ID, &user.Username, &user.Role)
-
-    if err == sql.ErrNoRows {
-        c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
-        return
-    } else if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
-
-    c.JSON(http.StatusOK, gin.H{
-        "user": user,
-        "token": "dummy-token", // TODO: implement JWT
-    })
-}
-
-// Course handlers
-func getCoursesByRole(c *gin.Context) {
-    role := c.Query("role")
-    
-    var rows *sql.Rows
     var err error
-    
-    if role == "" {
-        rows, err = db.Query("SELECT id, name, description, role FROM courses")
-    } else {
-        rows, err = db.Query("SELECT id, name, description, role FROM courses WHERE role = $1", role)
-    }
+    host := getEnv("DB_HOST", "localhost")
+    port := getEnv("DB_PORT", "5432")
+    user := getEnv("DB_USER", "postgres")
+    password := getEnv("DB_PASSWORD", "postgres")
+    dbname := getEnv("DB_NAME", "postgres")
 
+    connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+        host, port, user, password, dbname)
+
+    db, err = sql.Open("postgres", connStr)
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
-    defer rows.Close()
-
-    var courses []Course
-    for rows.Next() {
-        var course Course
-        err := rows.Scan(&course.ID, &course.Name, &course.Description, &course.Role)
-        if err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-            return
-        }
-        courses = append(courses, course)
+        log.Fatal("Failed to open database:", err)
     }
 
-    if courses == nil {
-        courses = []Course{}
-    }
+    db.SetMaxOpenConns(25)
+    db.SetMaxIdleConns(20)
+    db.SetConnMaxLifetime(5 * time.Minute)
 
-    c.JSON(http.StatusOK, courses)
-}
-
-// Progress handlers
-func updateCourseProgress(c *gin.Context) {
-    var progress CourseProgress
-    if err := c.ShouldBindJSON(&progress); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
-
-    err := db.QueryRow(
-        `UPDATE course_progress 
-         SET progress = $1, quiz_score = $2, written_exam = $3, updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $4 AND course_id = $5
-         RETURNING id, updated_at`,
-        progress.Progress, progress.QuizScore, progress.WrittenExam, 
-        progress.UserID, progress.CourseID,
-    ).Scan(&progress.ID, &progress.UpdatedAt)
-
+    err = db.Ping()
     if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
+        log.Fatal("Failed to ping database:", err)
     }
 
-    c.JSON(http.StatusOK, progress)
+    log.Println("Successfully connected to database")
 }
 
 func main() {
     initDB()
     defer db.Close()
-	// Seed data in development mode
-	if os.Getenv("APP_ENV") == "development" {
-        seedData(db)
-    }
+
     r := gin.Default()
-    
+
     // CORS configuration
     config := cors.DefaultConfig()
-    config.AllowAllOrigins = true
-    config.AllowHeaders = append(config.AllowHeaders, "Authorization")
+    config.AllowOrigins = []string{"http://localhost:3000"}
+    config.AllowCredentials = true
+    config.AddAllowHeaders("authorization")
     r.Use(cors.New(config))
 
-    // Documentation
-    r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-    
     // Health check
-    r.GET("/health", getHealth)
+    r.GET("/api/health", func(c *gin.Context) {
+        c.JSON(http.StatusOK, gin.H{"status": "ok"})
+    })
 
-    // Public routes
-    r.POST("/login", login)
-
-    // API routes
-    api := r.Group("/api/v1")
-    // TODO: Add JWT middleware here
+    // Routes
+    api := r.Group("/api")
     {
-        // User routes
-        api.GET("/users/me", getCurrentUser)
-        
-        // Course routes
-        api.GET("/courses", getCoursesByRole)
-        api.GET("/courses/:id", getCourse)
-        
-        // Progress routes
-        api.GET("/progress", getUserProgress)
-        api.POST("/progress", createProgress)
-        api.PUT("/progress", updateCourseProgress)
-        
-        // Quiz routes
-        api.POST("/quiz-results", submitQuizResults)
-        
-        // Written exam routes
-        api.POST("/written-exam", submitWrittenExam)
+        api.POST("/register", func(c *gin.Context) {
+            var user struct {
+                Name     string `json:"name"`
+                Email    string `json:"email"`
+                Password string `json:"password"`
+                Role     string `json:"role"`
+            }
+
+            if err := c.BindJSON(&user); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+            }
+
+            query := `
+                INSERT INTO users (name, email, password, role)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id`
+
+            var id int
+            err := db.QueryRow(query, user.Name, user.Email, user.Password, user.Role).Scan(&id)
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+                return
+            }
+
+            c.JSON(http.StatusCreated, gin.H{
+                "id": id,
+                "message": "User created successfully",
+            })
+        })
     }
 
-    r.Run(":8080")
+    port := getEnv("PORT", "8080")
+    r.Run(":" + port)
 }

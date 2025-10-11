@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Pie, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -30,6 +31,7 @@ function HRDashboard() {
     assigned: 0,
     unassigned: 0
   });
+  const navigate = useNavigate(); // เพิ่ม useNavigate
   const [examScores, setExamScores] = useState({
     scores: [],
     maxScore: 0,

@@ -12,7 +12,8 @@ export const authService = {
       });
 
       if (!response.ok) {
-        throw new Error('Login failed');
+        const error = await response.json();
+        throw new Error(error.message || 'Login failed');
       }
 
       const data = await response.json();
@@ -27,6 +28,30 @@ export const authService = {
     }
   },
 
+  async refreshToken() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No token found');
+
+      const response = await fetch(`${BASE_URL}/refresh-token`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) throw new Error('Token refresh failed');
+
+      const data = await response.json();
+      localStorage.setItem('token', data.token);
+      return data.token;
+    } catch (error) {
+      this.logout();
+      throw error;
+    }
+  },
+
   logout() {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
@@ -35,6 +60,11 @@ export const authService = {
   getCurrentUser() {
     const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
+  },
+
+  getAuthHeader() {
+    const token = localStorage.getItem('token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
   },
 
   isHR() {
