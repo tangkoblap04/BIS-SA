@@ -6,7 +6,6 @@ import ProtectedRoute from './components/ProtectedRoute';
 import WrittenExam from './components/courses/WrittenExam';
 import EmployeeDashboard from './components/dashboard/EmployeeDashboard';
 import HRDashboard from './components/dashboard/HRDashboard';
-import AddUser from './components/AddUser';
 import Navbar from './components/common/Navbar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { authService } from './services/auth.service';
@@ -85,21 +84,12 @@ function AppContent() {
           path="/hr-dashboard"
           element={
             <ProtectedRoute checkRole={() => authService.isHR()}>
-              <Navbar />
               <HRDashboard />
             </ProtectedRoute>
           }
         />
 
-        <Route
-          path="/hr-dashboard/add-user"
-          element={
-            <ProtectedRoute checkRole={() => authService.isHR()}>
-              <Navbar />
-              <AddUser />
-            </ProtectedRoute>
-          }
-        />
+
 
         {/* Catch all other routes - redirect ไป login ถ้าไม่มี user */}
         <Route

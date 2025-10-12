@@ -58,8 +58,10 @@ function CourseDetailPage() {
     });
     localStorage.setItem('quizResults', JSON.stringify(results));
 
-    // เมื่อทำ Quiz เสร็จแล้วให้ไปต่อที่ Written Exam
-    setIsQuizCompleted(true);
+    // ตรวจสอบว่าต้องไปทำข้อสอบเขียนหรือไม่
+    if (quizResult.goToWrittenExam) {
+      setIsQuizCompleted(true);
+    }
   };
 
   const handleWrittenExamComplete = (examResult) => {

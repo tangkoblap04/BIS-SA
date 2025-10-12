@@ -5,6 +5,8 @@ function CourseList() {
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [selectedCourse, setSelectedCourse] = useState(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
     useEffect(() => {
         fetchCourses();
@@ -39,6 +41,45 @@ function CourseList() {
         }
     };
 
+    const handleEdit = async (course) => {
+        setSelectedCourse({ ...course });
+        setIsEditModalOpen(true);
+    };
+
+    const handleUpdate = async () => {
+        try {
+            const updateData = {
+                title: selectedCourse.title,
+                description: selectedCourse.description,
+                category: selectedCourse.category,
+                duration: parseInt(selectedCourse.duration) || 0,
+                video_url: selectedCourse.video_url
+            };
+
+            await courseService.updateCourse(selectedCourse.id, updateData);
+            alert('อัปเดตคอร์สสำเร็จ');
+            fetchCourses(); // Refresh the list
+            setIsEditModalOpen(false);
+            setSelectedCourse(null);
+        } catch (error) {
+            console.error('Error updating course:', error);
+            alert('ไม่สามารถอัปเดตคอร์สได้: ' + error.message);
+        }
+    };
+
+    const handleDelete = async (courseId) => {
+        if (window.confirm('คุณแน่ใจหรือไม่ที่จะลบคอร์สนี้? การลบจะไม่สามารถกู้คืนได้')) {
+            try {
+                await courseService.deleteCourse(courseId);
+                alert('ลบคอร์สสำเร็จ');
+                fetchCourses(); // Refresh the list
+            } catch (error) {
+                console.error('Error deleting course:', error);
+                alert('ไม่สามารถลบคอร์สได้: ' + error.message);
+            }
+        }
+    };
+
     const getCategoryLabel = (category) => {
         const categories = {
             'management': 'การจัดการ',
@@ -48,6 +89,136 @@ function CourseList() {
             'compliance': 'การปฏิบัติตามกฎระเบียบ'
         };
         return categories[category] || category;
+    };
+
+    const EditModal = () => {
+        if (!selectedCourse) return null;
+
+        const categories = [
+            { value: 'management', label: 'การจัดการ' },
+            { value: 'customer-service', label: 'การบริการลูกค้า' },
+            { value: 'technical', label: 'เทคนิค' },
+            { value: 'soft-skills', label: 'ทักษะส่วนบุคคล' },
+            { value: 'compliance', label: 'การปฏิบัติตามกฎระเบียบ' }
+        ];
+
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
+                    <h3 className="text-lg font-medium mb-4">แก้ไขคอร์ส</h3>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                ชื่อคอร์ส
+                            </label>
+                            <input
+                                type="text"
+                                value={selectedCourse.title || ''}
+                                onChange={(e) => setSelectedCourse({
+                                    ...selectedCourse,
+                                    title: e.target.value
+                                })}
+                                className="w-full p-2 border border-gray-300 rounded-md"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                คำอธิบาย
+                            </label>
+                            <textarea
+                                value={selectedCourse.description || ''}
+                                onChange={(e) => setSelectedCourse({
+                                    ...selectedCourse,
+                                    description: e.target.value
+                                })}
+                                className="w-full p-2 border border-gray-300 rounded-md"
+                                rows="3"
+                                required
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    หมวดหมู่
+                                </label>
+                                <select
+                                    value={selectedCourse.category || ''}
+                                    onChange={(e) => setSelectedCourse({
+                                        ...selectedCourse,
+                                        category: e.target.value
+                                    })}
+                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    required
+                                >
+                                    <option value="">เลือกหมวดหมู่</option>
+                                    {categories.map((cat) => (
+                                        <option key={cat.value} value={cat.value}>
+                                            {cat.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    ระยะเวลา (นาที)
+                                </label>
+                                <input
+                                    type="number"
+                                    value={selectedCourse.duration || ''}
+                                    onChange={(e) => setSelectedCourse({
+                                        ...selectedCourse,
+                                        duration: e.target.value
+                                    })}
+                                    className="w-full p-2 border border-gray-300 rounded-md"
+                                    min="1"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                URL วิดีโอ
+                            </label>
+                            <input
+                                type="url"
+                                value={selectedCourse.video_url || ''}
+                                onChange={(e) => setSelectedCourse({
+                                    ...selectedCourse,
+                                    video_url: e.target.value
+                                })}
+                                className="w-full p-2 border border-gray-300 rounded-md"
+                                placeholder="https://www.youtube.com/watch?v=..."
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div className="mt-6 flex justify-end space-x-3">
+                        <button
+                            onClick={() => {
+                                setIsEditModalOpen(false);
+                                setSelectedCourse(null);
+                            }}
+                            className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                        >
+                            ยกเลิก
+                        </button>
+                        <button
+                            onClick={handleUpdate}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                        >
+                            บันทึกการเปลี่ยนแปลง
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     const formatDate = (dateString) => {
@@ -161,10 +332,16 @@ function CourseList() {
                             )}
 
                             <div className="flex justify-end space-x-2">
-                                <button className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600 transition-colors text-sm">
+                                <button
+                                    onClick={() => handleEdit(course)}
+                                    className="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600 transition-colors text-sm"
+                                >
                                     แก้ไข
                                 </button>
-                                <button className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors text-sm">
+                                <button
+                                    onClick={() => handleDelete(course.id)}
+                                    className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors text-sm"
+                                >
                                     ลบ
                                 </button>
                                 <button className="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition-colors text-sm">
@@ -179,6 +356,8 @@ function CourseList() {
             <div className="mt-6 text-center text-gray-500 text-sm">
                 พบทั้งหมด {courses.length} คอร์ส
             </div>
+
+            {isEditModalOpen && <EditModal />}
         </div>
     );
 }

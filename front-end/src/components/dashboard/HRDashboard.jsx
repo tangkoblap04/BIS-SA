@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Pie, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -14,6 +13,7 @@ import {
 import WriteExamAnswers from './WriteExamAnswers';
 import CourseManagement from './CourseManagement';
 import CourseList from './course-management/CourseList';
+import AddUser from '../AddUser';
 
 ChartJS.register(
   ArcElement,
@@ -32,7 +32,6 @@ function HRDashboard() {
     assigned: 0,
     unassigned: 0
   });
-  const navigate = useNavigate(); // เพิ่ม useNavigate
   const [examScores, setExamScores] = useState({
     scores: [],
     maxScore: 0,
@@ -127,6 +126,8 @@ function HRDashboard() {
         return <CourseManagement activeSection="add" />;
       case 'course-list':
         return <CourseList />;
+      case 'add-user':
+        return <AddUser />;
       default:
         return (
           <div>
@@ -221,70 +222,80 @@ function HRDashboard() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Sidebar */}
-      <div className="w-64 bg-white shadow-md">
-        <div className="p-6">
-          <h1 className="text-2xl font-semibold text-gray-800 mb-6">HR Dashboard</h1>
-          <nav className="space-y-2">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'dashboard'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-100'
-                }`}
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => setActiveTab('written-answers')}
-              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'written-answers'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-100'
-                }`}
-            >
-              Written Exam Answers
-            </button>
-            <button
-              onClick={() => setActiveTab('course-management')}
-              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'course-management'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-100'
-                }`}
-            >
-              Course Management
-            </button>
-            <button
-              onClick={() => setActiveTab('create-course')}
-              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'create-course'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-100'
-                }`}
-            >
-              Create Course
-            </button>
-            <button
-              onClick={() => setActiveTab('course-list')}
-              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'course-list'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-100'
-                }`}
-            >
-              View All Courses
-            </button>
-            <button
-              onClick={() => navigate('/hr-dashboard/add-user')}
-              className="w-full text-left px-4 py-2 rounded-md text-gray-600 hover:bg-gray-100"
-            >
-              Add User
-            </button>
-          </nav>
+    <div className="min-h-screen bg-gray-50">
+      <div className="flex">
+        {/* Sidebar */}
+        <div className="w-64 bg-white shadow-lg">
+          <div className="p-6">
+            <div className="flex items-center mb-8">
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center mr-3">
+                <span className="text-white font-bold text-lg">HR</span>
+              </div>
+              <h1 className="text-xl font-bold text-gray-800">HR Dashboard</h1>
+            </div>
+            <nav className="space-y-1">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'dashboard'
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+              >
+                📊 Dashboard
+              </button>
+              <button
+                onClick={() => setActiveTab('written-answers')}
+                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'written-answers'
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+              >
+                📝 Written Exam Answers
+              </button>
+              <button
+                onClick={() => setActiveTab('course-management')}
+                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'course-management'
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+              >
+                📚 Course Management
+              </button>
+              <button
+                onClick={() => setActiveTab('create-course')}
+                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'create-course'
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+              >
+                ➕ Create Course
+              </button>
+              <button
+                onClick={() => setActiveTab('course-list')}
+                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'course-list'
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+              >
+                👁️ View All Courses
+              </button>
+              <button
+                onClick={() => setActiveTab('add-user')}
+                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'add-user'
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+              >
+                👤 Add User
+              </button>
+            </nav>
+          </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1">
-        <div className="max-w-7xl mx-auto p-6">{renderContent()}</div>
+        {/* Main Content */}
+        <div className="flex-1">
+          <div className="max-w-7xl mx-auto p-6">{renderContent()}</div>
+        </div>
       </div>
     </div>
   );

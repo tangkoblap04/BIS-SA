@@ -454,6 +454,128 @@ func main() {
             })
         })
 
+        // Update course endpoint
+        api.PUT("/courses/:id", func(c *gin.Context) {
+            id := c.Param("id")
+            
+            var req struct {
+                Title       string `json:"title"`
+                Description string `json:"description"`
+                Category    string `json:"category"`
+                Duration    int    `json:"duration"`
+                VideoURL    string `json:"video_url"`
+            }
+
+            if err := c.BindJSON(&req); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+            }
+
+            // Validate required fields
+            if req.Title == "" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Title is required"})
+                return
+            }
+
+            query := `
+                UPDATE courses 
+                SET title = $1, description = $2, category = $3, duration = $4, video_url = $5, updated_at = NOW()
+                WHERE id = $6`
+
+            result, err := db.Exec(query, req.Title, req.Description, req.Category, req.Duration, req.VideoURL, id)
+            if err != nil {
+                log.Printf("Failed to update course: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update course"})
+                return
+            }
+
+            rowsAffected, err := result.RowsAffected()
+            if err != nil || rowsAffected == 0 {
+                c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+                return
+            }
+
+            c.JSON(http.StatusOK, gin.H{
+                "message": "Course updated successfully",
+            })
+        })
+
+        // Delete course endpoint
+        api.DELETE("/courses/:id", func(c *gin.Context) {
+            id := c.Param("id")
+            
+            // Begin transaction
+            tx, err := db.Begin()
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+                return
+            }
+            defer tx.Rollback()
+
+            // Delete exam_results first (foreign key constraint)
+            _, err = tx.Exec(`
+                DELETE FROM exam_results 
+                WHERE exam_id IN (SELECT id FROM exams WHERE course_id = $1)
+            `, id)
+            if err != nil {
+                log.Printf("Failed to delete exam results: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course exam results"})
+                return
+            }
+
+            // Delete course_progress
+            _, err = tx.Exec(`DELETE FROM course_progress WHERE course_id = $1`, id)
+            if err != nil {
+                log.Printf("Failed to delete course progress: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course progress"})
+                return
+            }
+
+            // Delete questions (foreign key constraint)
+            _, err = tx.Exec(`
+                DELETE FROM questions 
+                WHERE exam_id IN (SELECT id FROM exams WHERE course_id = $1)
+            `, id)
+            if err != nil {
+                log.Printf("Failed to delete questions: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course questions"})
+                return
+            }
+
+            // Delete exams
+            _, err = tx.Exec(`DELETE FROM exams WHERE course_id = $1`, id)
+            if err != nil {
+                log.Printf("Failed to delete exams: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course exams"})
+                return
+            }
+
+            // Delete course
+            result, err := tx.Exec(`DELETE FROM courses WHERE id = $1`, id)
+            if err != nil {
+                log.Printf("Failed to delete course: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course"})
+                return
+            }
+
+            rowsAffected, err := result.RowsAffected()
+            if err != nil || rowsAffected == 0 {
+                c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+                return
+            }
+
+            // Commit transaction
+            err = tx.Commit()
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+                return
+            }
+
+            c.JSON(http.StatusOK, gin.H{
+                "message": "Course deleted successfully",
+            })
+        })
+
         // Exam endpoints
         api.GET("/exams/course/:courseId", func(c *gin.Context) {
             courseID := c.Param("courseId")

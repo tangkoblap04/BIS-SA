@@ -259,10 +259,23 @@ function CourseQuiz({ courseId, onComplete }) {
 
           <div className="space-y-4">
             <button
-              onClick={() => window.location.href = '/written-exam'}
+              onClick={() => {
+                if (onComplete) {
+                  // ส่งสัญญาณให้ CourseDetailPage เปลี่ยนไปแสดง WrittenExam
+                  onComplete({
+                    userId: localStorage.getItem('userId'),
+                    courseId: courseId,
+                    examId: exam.id,
+                    score: score,
+                    answers: answers,
+                    completedAt: new Date().toISOString(),
+                    goToWrittenExam: true // เพิ่ม flag นี้
+                  });
+                }
+              }}
               className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
-              ทำข้อสอบข้อเขียน
+              ไปทำข้อสอบเขียน
             </button>
           </div>
         </div>
