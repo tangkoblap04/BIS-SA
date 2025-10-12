@@ -226,43 +226,45 @@ function HRDashboard() {
           <nav className="space-y-2">
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`w-full text-left px-4 py-2 rounded-md ${
-                activeTab === 'dashboard'
+              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'dashboard'
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-100'
-              }`}
+                }`}
             >
               Dashboard
             </button>
             <button
               onClick={() => setActiveTab('written-answers')}
-              className={`w-full text-left px-4 py-2 rounded-md ${
-                activeTab === 'written-answers'
+              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'written-answers'
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-100'
-              }`}
+                }`}
             >
               Written Exam Answers
             </button>
             <button
               onClick={() => setActiveTab('course-management')}
-              className={`w-full text-left px-4 py-2 rounded-md ${
-                activeTab === 'course-management'
+              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'course-management'
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-100'
-              }`}
+                }`}
             >
               Course Management
             </button>
             <button
               onClick={() => setActiveTab('create-course')}
-              className={`w-full text-left px-4 py-2 rounded-md ${
-                activeTab === 'create-course'
+              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'create-course'
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-600 hover:bg-gray-100'
-              }`}
+                }`}
             >
               Create Course
+            </button>
+            <button
+              onClick={() => navigate('/hr-dashboard/add-user')}
+              className="w-full text-left px-4 py-2 rounded-md text-gray-600 hover:bg-gray-100"
+            >
+              Add User
             </button>
           </nav>
         </div>
@@ -274,7 +276,7 @@ function HRDashboard() {
       </div>
     </div>
   );
-        
+
 }
 
 export default HRDashboard;

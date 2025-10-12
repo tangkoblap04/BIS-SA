@@ -5,7 +5,7 @@ function ProtectedRoute({ children, checkRole }) {
   const user = authService.getCurrentUser();
 
   if (!user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   if (checkRole && !checkRole()) {

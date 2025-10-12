@@ -3,14 +3,16 @@ version: '3.8'
 services:
   api:
     build: 
-      context: ./new-backend
+      context: ./back-end-API
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
     depends_on:
-      - postgres-db
+      postgres-db:
+        condition: service_healthy
     networks:
       - postgres-network
+    restart: on-failure
 
   postgres-db:
     image: postgres:latest
@@ -18,6 +20,11 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     ports:
       - "5432:5432"
     volumes:

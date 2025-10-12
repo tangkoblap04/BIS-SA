@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/auth.service';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -15,20 +17,26 @@ export default function Login() {
       setError('กรุณากรอกอีเมลและรหัสผ่าน');
       return;
     }
-    
-    // Temporary login logic for testing
-    if (email === 'hr@example.com' && password === 'hr123456') {
-      const user = { email, role: 'HR', name: 'HR Admin' };
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('token', 'dummy-token');
-      navigate('/hr-dashboard');
-    } else if (email === 'employee@example.com' && password === 'emp123456') {
-      const user = { email, role: 'employee', name: 'Employee User' };
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('token', 'dummy-token');
-      navigate('/courses');
-    } else {
-      setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+
+    try {
+      setError('');
+      const response = await login(email, password);
+
+      if (response.token && response.user) {
+        // Navigate based on user role
+        if (response.user.role === 'HR') {
+          navigate('/hr-dashboard');
+        } else {
+          navigate('/dashboard'); // Employee จะไปหน้า Employee Dashboard
+        }
+      } else {
+        setError('ข้อมูลการเข้าสู่ระบบไม่ถูกต้อง');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      setError(error.message || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
     }
   }
 

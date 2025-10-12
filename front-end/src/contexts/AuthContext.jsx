@@ -8,10 +8,15 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // ตรวจสอบ user ที่ login ไว้จาก localStorage
+    // Clear localStorage เพื่อให้เริ่มต้นด้วยหน้า login เสมอ
     const initAuth = () => {
-      const currentUser = authService.getCurrentUser();
-      setUser(currentUser);
+      // Clear existing authentication data
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      sessionStorage.clear();
+
+      // Set user เป็น null เสมอ เพื่อให้เริ่มต้นด้วยหน้า login
+      setUser(null);
       setLoading(false);
     };
     initAuth();
@@ -20,6 +25,12 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const response = await authService.login(email, password);
+
+      // Save to localStorage
+      localStorage.setItem('user', JSON.stringify(response.user));
+      localStorage.setItem('token', response.token);
+
+      // Update state
       setUser(response.user);
       return response;
     } catch (error) {
@@ -39,9 +50,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
+    <AuthContext.Provider
+      value={{
+        user,
         loading,
         login,
         logout,

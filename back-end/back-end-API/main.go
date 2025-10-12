@@ -10,6 +10,7 @@ import (
 
     "github.com/gin-contrib/cors"
     "github.com/gin-gonic/gin"
+    "github.com/dgrijalva/jwt-go"
     _ "github.com/lib/pq"
 )
 
@@ -24,7 +25,7 @@ func getEnv(key, fallback string) string {
 
 func initDB() {
     var err error
-    host := getEnv("DB_HOST", "localhost")
+    host := getEnv("DB_HOST", "postgres-db")
     port := getEnv("DB_PORT", "5432")
     user := getEnv("DB_USER", "postgres")
     password := getEnv("DB_PASSWORD", "postgres")
@@ -58,9 +59,10 @@ func main() {
 
     // CORS configuration
     config := cors.DefaultConfig()
-    config.AllowOrigins = []string{"http://localhost:3000"}
-    config.AllowCredentials = true
-    config.AddAllowHeaders("authorization")
+    config.AllowAllOrigins = true
+    config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+    config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+    config.AllowCredentials = false // Set to false when AllowAllOrigins is true
     r.Use(cors.New(config))
 
     // Health check
@@ -71,7 +73,7 @@ func main() {
     // Routes
     api := r.Group("/api")
     {
-        api.POST("/register", func(c *gin.Context) {
+        api.POST("/users", func(c *gin.Context) {
             var user struct {
                 Name     string `json:"name"`
                 Email    string `json:"email"`
@@ -84,13 +86,32 @@ func main() {
                 return
             }
 
+            // Validate role
+            if user.Role != "HR" && user.Role != "employee" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Must be 'HR' or 'employee'"})
+                return
+            }
+
+            // Check if email already exists
+            var existingCount int
+            checkQuery := "SELECT COUNT(*) FROM users WHERE email = $1"
+            err := db.QueryRow(checkQuery, user.Email).Scan(&existingCount)
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+                return
+            }
+            if existingCount > 0 {
+                c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+                return
+            }
+
             query := `
                 INSERT INTO users (name, email, password, role)
                 VALUES ($1, $2, $3, $4)
                 RETURNING id`
 
             var id int
-            err := db.QueryRow(query, user.Name, user.Email, user.Password, user.Role).Scan(&id)
+            err = db.QueryRow(query, user.Name, user.Email, user.Password, user.Role).Scan(&id)
             if err != nil {
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
                 return
@@ -98,7 +119,80 @@ func main() {
 
             c.JSON(http.StatusCreated, gin.H{
                 "id": id,
+                "name": user.Name,
+                "email": user.Email,
+                "role": user.Role,
                 "message": "User created successfully",
+            })
+        })
+
+        api.POST("/login", func(c *gin.Context) {
+            log.Printf("Login request from origin: %s", c.GetHeader("Origin"))
+            log.Printf("Login request method: %s", c.Request.Method)
+            
+            var loginReq struct {
+                Email    string `json:"email"`
+                Password string `json:"password"`
+            }
+
+            if err := c.BindJSON(&loginReq); err != nil {
+                log.Printf("Login bind error: %v", err)
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+            }
+            
+            log.Printf("Login attempt for email: %s", loginReq.Email)
+
+            // Get user from database
+            var user struct {
+                ID       int    `json:"id"`
+                Name     string `json:"name"`
+                Email    string `json:"email"`
+                Password string `json:"password"`
+                Role     string `json:"role"`
+            }
+
+            query := "SELECT id, name, email, password, role FROM users WHERE email = $1"
+            err := db.QueryRow(query, loginReq.Email).Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Role)
+            if err != nil {
+                if err == sql.ErrNoRows {
+                    c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+                    return
+                }
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+                return
+            }
+
+            // Compare password (direct comparison, no hashing)
+            if user.Password != loginReq.Password {
+                c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+                return
+            }
+
+            // Generate JWT token
+            token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+                "user_id": user.ID,
+                "email":   user.Email,
+                "role":    user.Role,
+                "exp":     time.Now().Add(time.Hour * 24).Unix(),
+            })
+
+            tokenString, err := token.SignedString([]byte("your-secret-key"))
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
+                return
+            }
+
+            // Return user data (without password)
+            c.JSON(http.StatusOK, gin.H{
+                "token": tokenString,
+                "user": gin.H{
+                    "id":   user.ID,
+                    "name": user.Name,
+                    "email": user.Email,
+                    "role": user.Role,
+                },
+                "message": "Login successful",
             })
         })
     }
