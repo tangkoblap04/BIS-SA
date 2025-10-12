@@ -14,6 +14,7 @@ import WriteExamAnswers from './WriteExamAnswers';
 import CourseManagement from './CourseManagement';
 import CourseList from './course-management/CourseList';
 import AddUser from '../AddUser';
+import HRNavbar from '../common/HRNavbar';
 
 ChartJS.register(
   ArcElement,
@@ -223,6 +224,9 @@ function HRDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* HR Navbar */}
+      <HRNavbar />
+
       <div className="flex">
         {/* Sidebar */}
         <div className="w-64 bg-white shadow-lg">

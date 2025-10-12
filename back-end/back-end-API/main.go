@@ -44,12 +44,24 @@ func initDB() {
     db.SetMaxIdleConns(20)
     db.SetConnMaxLifetime(5 * time.Minute)
 
-    err = db.Ping()
-    if err != nil {
-        log.Fatal("Failed to ping database:", err)
+    // Retry connection with exponential backoff
+    maxRetries := 10
+    for i := 0; i < maxRetries; i++ {
+        err = db.Ping()
+        if err == nil {
+            log.Println("Successfully connected to database")
+            return
+        }
+        
+        log.Printf("Failed to ping database (attempt %d/%d): %v", i+1, maxRetries, err)
+        if i < maxRetries-1 {
+            sleepTime := time.Duration(i+1) * 2 * time.Second
+            log.Printf("Retrying in %v...", sleepTime)
+            time.Sleep(sleepTime)
+        }
     }
-
-    log.Println("Successfully connected to database")
+    
+    log.Fatal("Failed to connect to database after all retries")
 }
 
 func main() {
