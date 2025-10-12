@@ -195,6 +195,162 @@ func main() {
                 "message": "Login successful",
             })
         })
+
+        // Course endpoints
+        api.POST("/courses", func(c *gin.Context) {
+            var course struct {
+                Title       string `json:"title"`
+                Description string `json:"description"`
+                Category    string `json:"category"`
+                Duration    int    `json:"duration"`
+                VideoURL    string `json:"video_url"`
+            }
+
+            if err := c.BindJSON(&course); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+            }
+
+            // Validate required fields
+            if course.Title == "" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Title is required"})
+                return
+            }
+
+            // For now, set created_by to 1 (first user)
+            // In production, get this from JWT token
+            createdBy := 1
+
+            query := `
+                INSERT INTO courses (title, description, category, duration, video_url, created_by, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                RETURNING id, created_at`
+
+            var id int
+            var createdAt time.Time
+            err := db.QueryRow(query, course.Title, course.Description, course.Category, 
+                course.Duration, course.VideoURL, createdBy).Scan(&id, &createdAt)
+            if err != nil {
+                log.Printf("Failed to create course: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
+                return
+            }
+
+            c.JSON(http.StatusCreated, gin.H{
+                "id":          id,
+                "title":       course.Title,
+                "description": course.Description,
+                "category":    course.Category,
+                "duration":    course.Duration,
+                "video_url":   course.VideoURL,
+                "created_by":  createdBy,
+                "created_at":  createdAt,
+                "message":     "Course created successfully",
+            })
+        })
+
+        api.GET("/courses", func(c *gin.Context) {
+            query := `
+                SELECT c.id, c.title, c.description, c.category, c.duration, c.video_url, 
+                       c.created_by, c.created_at, u.name as creator_name
+                FROM courses c
+                LEFT JOIN users u ON c.created_by = u.id
+                ORDER BY c.created_at DESC`
+
+            rows, err := db.Query(query)
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch courses"})
+                return
+            }
+            defer rows.Close()
+
+            var courses []gin.H
+            for rows.Next() {
+                var course struct {
+                    ID          int       `json:"id"`
+                    Title       string    `json:"title"`
+                    Description string    `json:"description"`
+                    Category    string    `json:"category"`
+                    Duration    int       `json:"duration"`
+                    VideoURL    string    `json:"video_url"`
+                    CreatedBy   int       `json:"created_by"`
+                    CreatedAt   time.Time `json:"created_at"`
+                    CreatorName string    `json:"creator_name"`
+                }
+
+                err := rows.Scan(&course.ID, &course.Title, &course.Description, &course.Category,
+                    &course.Duration, &course.VideoURL, &course.CreatedBy, &course.CreatedAt, &course.CreatorName)
+                if err != nil {
+                    c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan course"})
+                    return
+                }
+
+                courses = append(courses, gin.H{
+                    "id":           course.ID,
+                    "title":        course.Title,
+                    "description":  course.Description,
+                    "category":     course.Category,
+                    "duration":     course.Duration,
+                    "video_url":    course.VideoURL,
+                    "created_by":   course.CreatedBy,
+                    "created_at":   course.CreatedAt,
+                    "creator_name": course.CreatorName,
+                })
+            }
+
+            c.JSON(http.StatusOK, gin.H{
+                "courses": courses,
+            })
+        })
+
+        api.GET("/courses/:id", func(c *gin.Context) {
+            id := c.Param("id")
+            
+            query := `
+                SELECT c.id, c.title, c.description, c.category, c.duration, c.video_url, 
+                       c.created_by, c.created_at, u.name as creator_name
+                FROM courses c
+                LEFT JOIN users u ON c.created_by = u.id
+                WHERE c.id = $1`
+
+            var course struct {
+                ID          int       `json:"id"`
+                Title       string    `json:"title"`
+                Description string    `json:"description"`
+                Category    string    `json:"category"`
+                Duration    int       `json:"duration"`
+                VideoURL    string    `json:"video_url"`
+                CreatedBy   int       `json:"created_by"`
+                CreatedAt   time.Time `json:"created_at"`
+                CreatorName string    `json:"creator_name"`
+            }
+
+            err := db.QueryRow(query, id).Scan(&course.ID, &course.Title, &course.Description, 
+                &course.Category, &course.Duration, &course.VideoURL, &course.CreatedBy, 
+                &course.CreatedAt, &course.CreatorName)
+            if err != nil {
+                if err == sql.ErrNoRows {
+                    c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+                    return
+                }
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch course"})
+                return
+            }
+
+            c.JSON(http.StatusOK, gin.H{
+                "course": gin.H{
+                    "id":           course.ID,
+                    "title":        course.Title,
+                    "description":  course.Description,
+                    "category":     course.Category,
+                    "duration":     course.Duration,
+                    "video_url":    course.VideoURL,
+                    "created_by":   course.CreatedBy,
+                    "created_at":   course.CreatedAt,
+                    "creator_name": course.CreatorName,
+                },
+            })
+        })
     }
 
     port := getEnv("PORT", "8080")

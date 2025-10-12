@@ -13,6 +13,7 @@ import {
 } from 'chart.js';
 import WriteExamAnswers from './WriteExamAnswers';
 import CourseManagement from './CourseManagement';
+import CourseList from './course-management/CourseList';
 
 ChartJS.register(
   ArcElement,
@@ -124,6 +125,8 @@ function HRDashboard() {
         return <CourseManagement activeSection="list" />;
       case 'create-course':
         return <CourseManagement activeSection="add" />;
+      case 'course-list':
+        return <CourseList />;
       default:
         return (
           <div>
@@ -227,8 +230,8 @@ function HRDashboard() {
             <button
               onClick={() => setActiveTab('dashboard')}
               className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'dashboard'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-100'
                 }`}
             >
               Dashboard
@@ -236,8 +239,8 @@ function HRDashboard() {
             <button
               onClick={() => setActiveTab('written-answers')}
               className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'written-answers'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-100'
                 }`}
             >
               Written Exam Answers
@@ -245,8 +248,8 @@ function HRDashboard() {
             <button
               onClick={() => setActiveTab('course-management')}
               className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'course-management'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-100'
                 }`}
             >
               Course Management
@@ -254,11 +257,20 @@ function HRDashboard() {
             <button
               onClick={() => setActiveTab('create-course')}
               className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'create-course'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-100'
                 }`}
             >
               Create Course
+            </button>
+            <button
+              onClick={() => setActiveTab('course-list')}
+              className={`w-full text-left px-4 py-2 rounded-md ${activeTab === 'course-list'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-100'
+                }`}
+            >
+              View All Courses
             </button>
             <button
               onClick={() => navigate('/hr-dashboard/add-user')}

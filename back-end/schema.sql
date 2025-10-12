@@ -10,9 +10,12 @@ CREATE TABLE users (
 
 CREATE TABLE courses (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
+    title VARCHAR(255) NOT NULL,
     description TEXT,
-    role VARCHAR(50) NOT NULL,
+    category VARCHAR(100),
+    duration INTEGER DEFAULT 0, -- duration in minutes
+    video_url TEXT,
+    created_by INTEGER REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

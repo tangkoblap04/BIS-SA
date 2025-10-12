@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tangkoblap04/BIS-SA/back-end/back-end-API/models"
+	"gorm.io/gorm"
 )
 
 // GetHealth handles health check endpoint
@@ -100,4 +103,166 @@ func SubmitWrittenExam(c *gin.Context) {
 
 	// TODO: Implement saving written exam to database
 	c.JSON(http.StatusCreated, exam)
+}
+
+// CreateCourse handles creating new course
+func CreateCourse(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			Title       string `json:"title" binding:"required"`
+			Description string `json:"description"`
+			Category    string `json:"category"`
+			Duration    int    `json:"duration"`
+			VideoURL    string `json:"video_url"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Get user ID from JWT token (assuming middleware sets it)
+		userID, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+			return
+		}
+
+		course := models.Course{
+			Title:       req.Title,
+			Description: req.Description,
+			Category:    req.Category,
+			Duration:    req.Duration,
+			VideoURL:    req.VideoURL,
+			CreatedBy:   userID.(uint),
+		}
+
+		if err := db.Create(&course).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
+			return
+		}
+
+		// Load creator info
+		if err := db.Preload("Creator").First(&course, course.ID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load course creator"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{
+			"message": "Course created successfully",
+			"course":  course,
+		})
+	}
+}
+
+// GetAllCourses handles getting all courses
+func GetAllCourses(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var courses []models.Course
+		
+		if err := db.Preload("Creator").Find(&courses).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch courses"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"courses": courses,
+		})
+	}
+}
+
+// GetCourseByID handles getting course by ID
+func GetCourseByID(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+			return
+		}
+
+		var course models.Course
+		if err := db.Preload("Creator").First(&course, id).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch course"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"course": course,
+		})
+	}
+}
+
+// UpdateCourse handles updating course
+func UpdateCourse(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+			return
+		}
+
+		var req struct {
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			Category    string `json:"category"`
+			Duration    int    `json:"duration"`
+			VideoURL    string `json:"video_url"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var course models.Course
+		if err := db.First(&course, id).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find course"})
+			return
+		}
+
+		// Update course fields
+		course.Title = req.Title
+		course.Description = req.Description
+		course.Category = req.Category
+		course.Duration = req.Duration
+		course.VideoURL = req.VideoURL
+
+		if err := db.Save(&course).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update course"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Course updated successfully",
+			"course":  course,
+		})
+	}
+}
+
+// DeleteCourse handles deleting course
+func DeleteCourse(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+			return
+		}
+
+		if err := db.Delete(&models.Course{}, id).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Course deleted successfully",
+		})
+	}
 }
