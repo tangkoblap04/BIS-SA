@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ClockIcon, UserIcon } from '@heroicons/react/24/outline';
 import { courseService } from '../../../services/course.service';
+import { COURSE_CATEGORIES } from '../../../constants/categories';
 
 function AddCourse() {
   const [currentStep, setCurrentStep] = useState(1);
@@ -40,14 +41,6 @@ function AddCourse() {
       ]
     }
   });
-
-  const categories = [
-    { value: 'management', label: 'การจัดการ' },
-    { value: 'customer-service', label: 'การบริการลูกค้า' },
-    { value: 'technical', label: 'เทคนิค' },
-    { value: 'soft-skills', label: 'ทักษะส่วนบุคคล' },
-    { value: 'compliance', label: 'การปฏิบัติตามกฎระเบียบ' }
-  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -215,9 +208,9 @@ function AddCourse() {
                   required
                 >
                   <option value="">เลือกหมวดหมู่</option>
-                  {categories.map((category) => (
+                  {COURSE_CATEGORIES.map((category) => (
                     <option key={category.value} value={category.value}>
-                      {category.label}
+                      {category.icon} {category.label}
                     </option>
                   ))}
                 </select>
@@ -256,7 +249,7 @@ function AddCourse() {
                     เลือกตำแหน่งที่สามารถมองเห็นได้
                   </label>
                   <div className="space-y-2">
-                    {categories.map((category) => (
+                    {COURSE_CATEGORIES.map((category) => (
                       <label key={category.value} className="flex items-center space-x-2">
                         <input
                           type="checkbox"
@@ -269,7 +262,7 @@ function AddCourse() {
                           }}
                           className="h-4 w-4 text-blue-600"
                         />
-                        <span className="text-sm text-gray-700">{category.label}</span>
+                        <span className="text-sm text-gray-700">{category.icon} {category.label}</span>
                       </label>
                     ))}
                   </div>

@@ -1,20 +1,13 @@
 import { useState, useEffect } from 'react';
 import { courseService } from '../services/course.service';
 import { Link } from 'react-router-dom';
+import { COURSE_CATEGORIES, getCategoryLabel } from '../constants/categories';
 
 function CoursePage() {
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCategories, setSelectedCategories] = useState([]);
-
-  const categories = [
-    { id: 'management', label: 'การจัดการ' },
-    { id: 'customer-service', label: 'การบริการลูกค้า' },
-    { id: 'technical', label: 'เทคนิค' },
-    { id: 'soft-skills', label: 'ทักษะส่วนบุคคล' },
-    { id: 'compliance', label: 'การปฏิบัติตามกฎระเบียบ' }
-  ];
 
   useEffect(() => {
     fetchCourses();
@@ -45,17 +38,6 @@ function CoursePage() {
   const filteredCourses = selectedCategories.length === 0
     ? courses
     : courses.filter(course => selectedCategories.includes(course.category));
-
-  const getCategoryLabel = (category) => {
-    const categoryMap = {
-      'management': 'การจัดการ',
-      'customer-service': 'การบริการลูกค้า',
-      'technical': 'เทคนิค',
-      'soft-skills': 'ทักษะส่วนบุคคล',
-      'compliance': 'การปฏิบัติตามกฎระเบียบ'
-    };
-    return categoryMap[category] || category;
-  };
 
   if (loading) {
     return (
@@ -98,17 +80,18 @@ function CoursePage() {
             <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">🏷️ หมวดหมู่</h3>
               <div className="space-y-3">
-                {categories.map(category => (
+                {COURSE_CATEGORIES.map(category => (
                   <label
-                    key={category.id}
+                    key={category.value}
                     className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   >
                     <input
                       type="checkbox"
-                      checked={selectedCategories.includes(category.id)}
-                      onChange={() => handleCategoryChange(category.id)}
+                      checked={selectedCategories.includes(category.value)}
+                      onChange={() => handleCategoryChange(category.value)}
                       className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                     />
+                    <span className="text-xl">{category.icon}</span>
                     <span className="text-gray-700">{category.label}</span>
                   </label>
                 ))}

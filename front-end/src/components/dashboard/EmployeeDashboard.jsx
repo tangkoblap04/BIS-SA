@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { courseService } from '../../services/course.service';
+import { dashboardService } from '../../services/dashboard.service';
 import { Link } from 'react-router-dom';
 
 // Mock data
@@ -48,54 +49,61 @@ const mockTrainingData = {
 
 function EmployeeDashboard() {
   const { user } = useAuth();
-  const [courses, setCourses] = useState([]);
+  const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalCourses: 0,
-    completedCourses: 0,
-    inProgressCourses: 0,
-    totalHours: 0,
-    completedHours: 0
-  });
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchCourses();
-  }, []);
+    if (user && user.id) {
+      fetchDashboardData();
+    }
+  }, [user]);
 
-  const fetchCourses = async () => {
+  const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await courseService.getAllCourses();
-      const coursesData = response.courses || response || [];
-      setCourses(coursesData);
+      setError(null);
 
-      // คำนวณสถิติ
-      const total = coursesData.length;
-      const completed = coursesData.filter(course => course.progress === 100).length;
-      const inProgress = coursesData.filter(course => course.progress > 0 && course.progress < 100).length;
-      const totalHours = coursesData.reduce((sum, course) => sum + (course.duration || 8), 0);
-      const completedHours = coursesData.reduce((sum, course) => {
-        const progress = course.progress || 0;
-        return sum + ((course.duration || 8) * progress / 100);
-      }, 0);
-
-      setStats({
-        totalCourses: total,
-        completedCourses: completed,
-        inProgressCourses: inProgress,
-        totalHours,
-        completedHours: Math.round(completedHours)
-      });
+      const data = await dashboardService.getDashboardData(user.id);
+      setDashboardData(dashboardService.formatDashboardData(data));
     } catch (error) {
-      console.error('Error fetching courses:', error);
-      // ใช้ mock data ถ้า API ไม่ทำงาน
-      setCourses(mockTrainingData.courses);
-      setStats({
-        totalCourses: mockTrainingData.courses.length,
-        completedCourses: mockTrainingData.courses.filter(c => c.progress === 100).length,
-        inProgressCourses: mockTrainingData.courses.filter(c => c.progress > 0 && c.progress < 100).length,
-        totalHours: mockTrainingData.totalHours,
-        completedHours: mockTrainingData.completedHours
+      console.error('Error fetching dashboard data:', error);
+      setError(error.message);
+
+      // Fallback to mock data if API fails
+      setDashboardData({
+        user: {
+          id: user.id,
+          name: user.name || 'พนักงาน',
+          role: user.role || 'employee'
+        },
+        stats: {
+          total_courses: mockTrainingData.courses.length,
+          completed_courses: mockTrainingData.courses.filter(c => c.progress === 100).length,
+          in_progress_courses: mockTrainingData.courses.filter(c => c.progress > 0 && c.progress < 100).length,
+          total_hours: mockTrainingData.totalHours,
+          completed_hours: mockTrainingData.completedHours
+        },
+        courses: mockTrainingData.courses,
+        recentExams: [],
+        weeklyProgress: [
+          { day: 'จ', hours: 2 },
+          { day: 'อ', hours: 1.5 },
+          { day: 'พ', hours: 3 },
+          { day: 'พฤ', hours: 2.5 },
+          { day: 'ศ', hours: 1 },
+          { day: 'ส', hours: 0 },
+          { day: 'อา', hours: 2 }
+        ],
+        achievements: [
+          {
+            id: 1,
+            title: 'นักเรียนใหม่',
+            description: 'เริ่มต้นการเรียนรู้แล้ว',
+            icon: '🎓',
+            type: 'start'
+          }
+        ]
       });
     } finally {
       setLoading(false);
@@ -103,6 +111,22 @@ function EmployeeDashboard() {
   };
 
   // ข้อมูลสำหรับ charts
+  const stats = dashboardData ? {
+    totalCourses: dashboardData.stats.total_courses,
+    completedCourses: dashboardData.stats.completed_courses,
+    inProgressCourses: dashboardData.stats.in_progress_courses,
+    totalHours: dashboardData.stats.total_hours,
+    completedHours: dashboardData.stats.completed_hours
+  } : {
+    totalCourses: 0,
+    completedCourses: 0,
+    inProgressCourses: 0,
+    totalHours: 0,
+    completedHours: 0
+  };
+
+  const courses = dashboardData ? dashboardData.courses : [];
+
   const courseStatusData = [
     { name: 'เสร็จสมบูรณ์', value: stats.completedCourses, fill: '#10B981' },
     { name: 'กำลังเรียน', value: stats.inProgressCourses, fill: '#3B82F6' },
@@ -113,13 +137,30 @@ function EmployeeDashboard() {
   const greeting = currentTime.getHours() < 12 ? 'สวัสดีตอนเช้า' :
     currentTime.getHours() < 18 ? 'สวัสดีตอนบ่าย' : 'สวัสดีตอนเย็น';
 
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">กำลังโหลดข้อมูล...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !dashboardData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-lg shadow-lg">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">เกิดข้อผิดพลาด</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={fetchDashboardData}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            ลองใหม่
+          </button>
         </div>
       </div>
     );

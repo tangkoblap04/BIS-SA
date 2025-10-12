@@ -14,6 +14,8 @@ import WriteExamAnswers from './WriteExamAnswers';
 import CourseManagement from './CourseManagement';
 import CourseList from './course-management/CourseList';
 import AddUser from '../AddUser';
+import ManageUsers from '../ManageUsers';
+import EditUser from '../EditUser';
 import HRNavbar from '../common/HRNavbar';
 
 ChartJS.register(
@@ -129,6 +131,10 @@ function HRDashboard() {
         return <CourseList />;
       case 'add-user':
         return <AddUser />;
+      case 'manage-users':
+        return <ManageUsers />;
+      case 'edit-user':
+        return <EditUser />;
       default:
         return (
           <div>
@@ -291,6 +297,24 @@ function HRDashboard() {
                   }`}
               >
                 👤 Add User
+              </button>
+              <button
+                onClick={() => setActiveTab('manage-users')}
+                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'manage-users'
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+              >
+                👥 จัดการผู้ใช้
+              </button>
+              <button
+                onClick={() => setActiveTab('edit-user')}
+                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'edit-user'
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+              >
+                ✏️ แก้ไขผู้ใช้
               </button>
             </nav>
           </div>

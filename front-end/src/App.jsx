@@ -6,6 +6,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 import WrittenExam from './components/courses/WrittenExam';
 import EmployeeHomepage from './components/dashboard/EmployeeHomepage';
 import HRDashboard from './components/dashboard/HRDashboard';
+import AddUser from './components/AddUser';
+import ManageUsers from './components/ManageUsers';
+import EditUser from './components/EditUser';
 import Navbar from './components/common/Navbar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { authService } from './services/auth.service';
@@ -89,6 +92,32 @@ function AppContent() {
           }
         />
 
+        <Route
+          path="/add-user"
+          element={
+            <ProtectedRoute checkRole={() => authService.isHR()}>
+              <AddUser />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/manage-users"
+          element={
+            <ProtectedRoute checkRole={() => authService.isHR()}>
+              <ManageUsers />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/edit-user"
+          element={
+            <ProtectedRoute checkRole={() => authService.isHR()}>
+              <EditUser />
+            </ProtectedRoute>
+          }
+        />
 
 
         {/* Catch all other routes - redirect ไป login ถ้าไม่มี user */}

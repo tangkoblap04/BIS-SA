@@ -145,6 +145,187 @@ func main() {
             })
         })
 
+        // GET all users (for HR)
+        api.GET("/users", func(c *gin.Context) {
+            rows, err := db.Query(`
+                SELECT id, name, email, role, created_at 
+                FROM users 
+                ORDER BY created_at DESC
+            `)
+            if err != nil {
+                log.Printf("Error fetching users: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
+                return
+            }
+            defer rows.Close()
+
+            var users []map[string]interface{}
+            for rows.Next() {
+                var user struct {
+                    ID        int       `json:"id"`
+                    Name      string    `json:"name"`
+                    Email     string    `json:"email"`
+                    Role      string    `json:"role"`
+                    CreatedAt time.Time `json:"created_at"`
+                }
+
+                err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.CreatedAt)
+                if err != nil {
+                    continue
+                }
+
+                users = append(users, map[string]interface{}{
+                    "id":         user.ID,
+                    "name":       user.Name,
+                    "email":      user.Email,
+                    "role":       user.Role,
+                    "created_at": user.CreatedAt,
+                })
+            }
+
+            if users == nil {
+                users = []map[string]interface{}{}
+            }
+
+            c.JSON(http.StatusOK, gin.H{"users": users})
+        })
+
+        // GET user by ID
+        api.GET("/users/:id", func(c *gin.Context) {
+            userID := c.Param("id")
+
+            var user struct {
+                ID        int       `json:"id"`
+                Name      string    `json:"name"`
+                Email     string    `json:"email"`
+                Role      string    `json:"role"`
+                CreatedAt time.Time `json:"created_at"`
+            }
+
+            err := db.QueryRow(`
+                SELECT id, name, email, role, created_at 
+                FROM users 
+                WHERE id = $1
+            `, userID).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.CreatedAt)
+
+            if err != nil {
+                log.Printf("Error fetching user: %v", err)
+                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+                return
+            }
+
+            c.JSON(http.StatusOK, user)
+        })
+
+        // PUT (Update) user by ID
+        api.PUT("/users/:id", func(c *gin.Context) {
+            userID := c.Param("id")
+
+            var updateData struct {
+                Name     string `json:"name"`
+                Email    string `json:"email"`
+                Role     string `json:"role"`
+                Password string `json:"password,omitempty"`
+            }
+
+            if err := c.BindJSON(&updateData); err != nil {
+                log.Printf("Error binding JSON: %v", err)
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+            }
+
+            // Validate role
+            if updateData.Role != "HR" && updateData.Role != "employee" {
+                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Must be 'HR' or 'employee'"})
+                return
+            }
+
+            // Check if email already exists for other users
+            var existingCount int
+            checkQuery := "SELECT COUNT(*) FROM users WHERE email = $1 AND id != $2"
+            err := db.QueryRow(checkQuery, updateData.Email, userID).Scan(&existingCount)
+            if err != nil {
+                log.Printf("Error checking email: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+                return
+            }
+            if existingCount > 0 {
+                c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+                return
+            }
+
+            // Build update query based on whether password is being changed
+            var query string
+            var args []interface{}
+
+            if updateData.Password != "" {
+                query = `
+                    UPDATE users 
+                    SET name = $1, email = $2, role = $3, password = $4, updated_at = NOW()
+                    WHERE id = $5
+                `
+                args = []interface{}{updateData.Name, updateData.Email, updateData.Role, updateData.Password, userID}
+            } else {
+                query = `
+                    UPDATE users 
+                    SET name = $1, email = $2, role = $3, updated_at = NOW()
+                    WHERE id = $4
+                `
+                args = []interface{}{updateData.Name, updateData.Email, updateData.Role, userID}
+            }
+
+            result, err := db.Exec(query, args...)
+            if err != nil {
+                log.Printf("Error updating user: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+                return
+            }
+
+            rowsAffected, err := result.RowsAffected()
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify update"})
+                return
+            }
+
+            if rowsAffected == 0 {
+                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+                return
+            }
+
+            c.JSON(http.StatusOK, gin.H{
+                "message": "User updated successfully",
+                "id": userID,
+            })
+        })
+
+        // DELETE user by ID (hard delete)
+        api.DELETE("/users/:id", func(c *gin.Context) {
+            userID := c.Param("id")
+
+            // Hard delete from database
+            query := `DELETE FROM users WHERE id = $1`
+
+            result, err := db.Exec(query, userID)
+            if err != nil {
+                log.Printf("Error deleting user: %v", err)
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+                return
+            }
+
+            rowsAffected, err := result.RowsAffected()
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify deletion"})
+                return
+            }
+
+            if rowsAffected == 0 {
+                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+                return
+            }
+
+            c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+        })
+
         api.POST("/login", func(c *gin.Context) {
             log.Printf("Login request from origin: %s", c.GetHeader("Origin"))
             log.Printf("Login request method: %s", c.Request.Method)
@@ -729,6 +910,231 @@ func main() {
                 "message": "Exam submitted successfully",
                 "result_id": resultID,
                 "score": score,
+            })
+        })
+
+        // Dashboard endpoint - Get user dashboard data
+        api.GET("/dashboard/:userId", func(c *gin.Context) {
+            userID := c.Param("userId")
+            
+            // Get user info
+            var user struct {
+                ID   int    `json:"id"`
+                Name string `json:"name"`
+                Role string `json:"role"`
+            }
+            
+            err := db.QueryRow("SELECT id, name, role FROM users WHERE id = $1", userID).Scan(&user.ID, &user.Name, &user.Role)
+            if err != nil {
+                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+                return
+            }
+
+            // Get course progress data
+            progressRows, err := db.Query(`
+                SELECT c.id, c.title, c.category, c.duration, c.description,
+                       COALESCE(cp.progress, 0) as progress,
+                       cp.completed_at,
+                       u.name as creator_name
+                FROM courses c
+                LEFT JOIN course_progress cp ON c.id = cp.course_id AND cp.user_id = $1
+                LEFT JOIN users u ON c.created_by = u.id
+                ORDER BY c.created_at DESC
+            `, userID)
+            
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch progress data"})
+                return
+            }
+            defer progressRows.Close()
+
+            var courses []map[string]interface{}
+            totalCourses := 0
+            completedCourses := 0
+            inProgressCourses := 0
+            totalHours := 0.0
+            completedHours := 0.0
+
+            for progressRows.Next() {
+                var course struct {
+                    ID          int            `json:"id"`
+                    Title       string         `json:"title"`
+                    Category    string         `json:"category"`
+                    Duration    int            `json:"duration"`
+                    Description string         `json:"description"`
+                    Progress    float64        `json:"progress"`
+                    CompletedAt sql.NullTime   `json:"completed_at"`
+                    CreatorName sql.NullString `json:"creator_name"`
+                }
+
+                err := progressRows.Scan(&course.ID, &course.Title, &course.Category, &course.Duration, 
+                    &course.Description, &course.Progress, &course.CompletedAt, &course.CreatorName)
+                if err != nil {
+                    continue
+                }
+
+                totalCourses++
+                hours := float64(course.Duration) / 60.0
+                totalHours += hours
+                completedHours += hours * (course.Progress / 100.0)
+
+                if course.Progress >= 100 {
+                    completedCourses++
+                } else if course.Progress > 0 {
+                    inProgressCourses++
+                }
+
+                var creatorName string
+                if course.CreatorName.Valid {
+                    creatorName = course.CreatorName.String
+                }
+
+                var completedAt interface{}
+                if course.CompletedAt.Valid {
+                    completedAt = course.CompletedAt.Time
+                }
+
+                courses = append(courses, map[string]interface{}{
+                    "id":           course.ID,
+                    "title":        course.Title,
+                    "category":     course.Category,
+                    "duration":     course.Duration,
+                    "description":  course.Description,
+                    "progress":     course.Progress,
+                    "completed_at": completedAt,
+                    "creator_name": creatorName,
+                })
+            }
+
+            // Get recent exam results
+            examRows, err := db.Query(`
+                SELECT er.score, er.created_at, c.title as course_title, e.title as exam_title
+                FROM exam_results er
+                JOIN courses c ON er.course_id = c.id
+                JOIN exams e ON er.exam_id = e.id
+                WHERE er.user_id = $1
+                ORDER BY er.created_at DESC
+                LIMIT 5
+            `, userID)
+
+            var recentExams []map[string]interface{}
+            if err == nil {
+                defer examRows.Close()
+                for examRows.Next() {
+                    var exam struct {
+                        Score       float64   `json:"score"`
+                        CreatedAt   time.Time `json:"created_at"`
+                        CourseTitle string    `json:"course_title"`
+                        ExamTitle   string    `json:"exam_title"`
+                    }
+
+                    err := examRows.Scan(&exam.Score, &exam.CreatedAt, &exam.CourseTitle, &exam.ExamTitle)
+                    if err != nil {
+                        continue
+                    }
+
+                    recentExams = append(recentExams, map[string]interface{}{
+                        "score":        exam.Score,
+                        "created_at":   exam.CreatedAt,
+                        "course_title": exam.CourseTitle,
+                        "exam_title":   exam.ExamTitle,
+                    })
+                }
+            }
+
+            // Generate weekly progress (mock data for now - could be enhanced with real tracking)
+            weeklyProgress := []map[string]interface{}{
+                {"day": "จ", "hours": 2.0},
+                {"day": "อ", "hours": 1.5},
+                {"day": "พ", "hours": 3.0},
+                {"day": "พฤ", "hours": 2.5},
+                {"day": "ศ", "hours": 1.0},
+                {"day": "ส", "hours": 0.0},
+                {"day": "อา", "hours": 2.0},
+            }
+
+            // Calculate achievements
+            achievements := []map[string]interface{}{}
+            if completedCourses > 0 {
+                achievements = append(achievements, map[string]interface{}{
+                    "id":          1,
+                    "title":       "นักเรียนดีเด่น",
+                    "description": fmt.Sprintf("เรียนจบ %d คอร์สแล้ว", completedCourses),
+                    "icon":        "🏆",
+                    "type":        "completion",
+                })
+            }
+            if inProgressCourses >= 2 {
+                achievements = append(achievements, map[string]interface{}{
+                    "id":          2,
+                    "title":       "กำลังใจดี",
+                    "description": fmt.Sprintf("กำลังเรียน %d คอร์สพร้อมกัน", inProgressCourses),
+                    "icon":        "📚",
+                    "type":        "progress",
+                })
+            }
+            if completedHours >= 10 {
+                achievements = append(achievements, map[string]interface{}{
+                    "id":          3,
+                    "title":       "ผู้เรียนรู้",
+                    "description": fmt.Sprintf("เรียนไปแล้ว %.0f ชั่วโมง", completedHours),
+                    "icon":        "⏰",
+                    "type":        "hours",
+                })
+            }
+
+            c.JSON(http.StatusOK, gin.H{
+                "user": map[string]interface{}{
+                    "id":   user.ID,
+                    "name": user.Name,
+                    "role": user.Role,
+                },
+                "stats": map[string]interface{}{
+                    "total_courses":     totalCourses,
+                    "completed_courses": completedCourses,
+                    "in_progress_courses": inProgressCourses,
+                    "total_hours":       int(totalHours),
+                    "completed_hours":   int(completedHours),
+                },
+                "courses":          courses,
+                "recent_exams":     recentExams,
+                "weekly_progress":  weeklyProgress,
+                "achievements":     achievements,
+            })
+        })
+
+        // Update course progress endpoint
+        api.POST("/course-progress", func(c *gin.Context) {
+            var progress struct {
+                UserID   int     `json:"user_id"`
+                CourseID int     `json:"course_id"`
+                Progress float64 `json:"progress"`
+            }
+
+            if err := c.BindJSON(&progress); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+            }
+
+            // Insert or update course progress
+            query := `
+                INSERT INTO course_progress (user_id, course_id, progress, updated_at, completed_at)
+                VALUES ($1, $2, $3, NOW(), CASE WHEN $3 >= 100 THEN NOW() ELSE NULL END)
+                ON CONFLICT (user_id, course_id)
+                DO UPDATE SET 
+                    progress = $3,
+                    updated_at = NOW(),
+                    completed_at = CASE WHEN $3 >= 100 THEN NOW() ELSE course_progress.completed_at END
+            `
+
+            _, err := db.Exec(query, progress.UserID, progress.CourseID, progress.Progress)
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update progress"})
+                return
+            }
+
+            c.JSON(http.StatusOK, gin.H{
+                "message": "Progress updated successfully",
             })
         })
     }
