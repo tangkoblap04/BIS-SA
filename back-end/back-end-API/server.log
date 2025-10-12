@@ -1,4 +1,4 @@
-2025/10/12 16:18:43 Successfully connected to database
+2025/10/12 17:08:51 Successfully connected to database
 [GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
 
 [GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
@@ -9,35 +9,29 @@
 [GIN-debug] POST   /seed                     --> main.main.func2 (4 handlers)
 [GIN-debug] POST   /api/users                --> main.main.func3 (4 handlers)
 [GIN-debug] GET    /api/users                --> main.main.func4 (4 handlers)
-[GIN-debug] DELETE /api/users/:id            --> main.main.func5 (4 handlers)
-[GIN-debug] POST   /api/login                --> main.main.func6 (4 handlers)
-[GIN-debug] POST   /api/courses              --> main.main.func7 (4 handlers)
-[GIN-debug] GET    /api/courses              --> main.main.func8 (4 handlers)
-[GIN-debug] GET    /api/courses/:id          --> main.main.func9 (4 handlers)
-[GIN-debug] PUT    /api/courses/:id          --> main.main.func10 (4 handlers)
-[GIN-debug] DELETE /api/courses/:id          --> main.main.func11 (4 handlers)
-[GIN-debug] GET    /api/exams/course/:courseId --> main.main.func12 (4 handlers)
-[GIN-debug] POST   /api/exam-results         --> main.main.func13 (4 handlers)
-[GIN-debug] GET    /api/dashboard/:userId    --> main.main.func14 (4 handlers)
-[GIN-debug] POST   /api/course-progress      --> main.main.func15 (4 handlers)
+[GIN-debug] GET    /api/users/:id            --> main.main.func5 (4 handlers)
+[GIN-debug] PUT    /api/users/:id            --> main.main.func6 (4 handlers)
+[GIN-debug] DELETE /api/users/:id            --> main.main.func7 (4 handlers)
+[GIN-debug] POST   /api/login                --> main.main.func8 (4 handlers)
+[GIN-debug] POST   /api/courses              --> main.main.func9 (4 handlers)
+[GIN-debug] GET    /api/courses              --> main.main.func10 (4 handlers)
+[GIN-debug] GET    /api/courses/:id          --> main.main.func11 (4 handlers)
+[GIN-debug] PUT    /api/courses/:id          --> main.main.func12 (4 handlers)
+[GIN-debug] DELETE /api/courses/:id          --> main.main.func13 (4 handlers)
+[GIN-debug] GET    /api/exams/course/:courseId --> main.main.func14 (4 handlers)
+[GIN-debug] POST   /api/exam-results         --> main.main.func15 (4 handlers)
+[GIN-debug] GET    /api/dashboard/:userId    --> main.main.func16 (4 handlers)
+[GIN-debug] POST   /api/course-progress      --> main.main.func17 (4 handlers)
 [GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
 Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.
 [GIN-debug] Listening and serving HTTP on :8080
-[GIN] 2025/10/12 - 16:18:48 | 200 |      56.906µs |             ::1 | GET      "/api/health"
-2025/10/12 16:18:48 Error seeding users: pq: duplicate key value violates unique constraint "users_email_key"
-[GIN] 2025/10/12 - 16:18:48 | 200 |    1.661411ms |             ::1 | POST     "/seed"
-2025/10/12 16:18:48 Login request from origin: 
-2025/10/12 16:18:48 Login request method: POST
-2025/10/12 16:18:48 Login attempt for email: employee@example.com
-[GIN] 2025/10/12 - 16:18:48 | 200 |    1.097584ms |             ::1 | POST     "/api/login"
-[GIN] 2025/10/12 - 16:18:55 | 500 |     435.939µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/12 - 16:18:55 | 500 |     335.986µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/12 - 16:18:59 | 500 |     340.705µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/12 - 16:19:00 | 500 |     321.213µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/12 - 16:19:02 | 500 |     339.197µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/12 - 16:19:02 | 500 |      491.56µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/12 - 16:19:08 | 500 |     379.517µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/12 - 16:19:08 | 500 |     334.322µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/12 - 16:19:28 | 500 |     420.694µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/12 - 16:19:28 | 500 |     381.104µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/12 - 17:08:56 | 200 |      81.923µs |             ::1 | GET      "/api/health"
+2025/10/12 17:08:56 Error seeding users: pq: duplicate key value violates unique constraint "users_email_key"
+[GIN] 2025/10/12 - 17:08:56 | 200 |    1.990538ms |             ::1 | POST     "/seed"
+2025/10/12 17:08:56 Login request from origin: 
+2025/10/12 17:08:56 Login request method: POST
+2025/10/12 17:08:56 Login attempt for email: employee@example.com
+[GIN] 2025/10/12 - 17:08:56 | 200 |    1.153459ms |             ::1 | POST     "/api/login"
+[GIN] 2025/10/12 - 17:08:59 | 200 |    1.181654ms |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/12 - 17:09:00 | 200 |     647.445µs |             ::1 | GET      "/api/courses"
 signal: interrupt
