@@ -1,10 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
-import CoursesPage from './pages/CoursePage';
+import WorkingCoursePage from './pages/WorkingCoursePage';
 import CourseDetailPage from './pages/CourseDetailPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import WrittenExam from './components/courses/WrittenExam';
-import EmployeeDashboard from './components/dashboard/EmployeeDashboard';
+import EmployeeHomepage from './components/dashboard/EmployeeHomepage';
 import HRDashboard from './components/dashboard/HRDashboard';
 import Navbar from './components/common/Navbar';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -45,7 +45,7 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Navbar />
-              <CoursesPage />
+              <WorkingCoursePage />
             </ProtectedRoute>
           }
         />
@@ -75,7 +75,7 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Navbar />
-              <EmployeeDashboard />
+              <EmployeeHomepage />
             </ProtectedRoute>
           }
         />

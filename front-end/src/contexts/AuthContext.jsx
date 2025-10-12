@@ -8,16 +8,29 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Clear localStorage เพื่อให้เริ่มต้นด้วยหน้า login เสมอ
+    // ตรวจสอบ authentication data ที่เก็บไว้ใน localStorage
     const initAuth = () => {
-      // Clear existing authentication data
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
-      sessionStorage.clear();
+      try {
+        const savedUser = localStorage.getItem('user');
+        const savedToken = localStorage.getItem('token');
 
-      // Set user เป็น null เสมอ เพื่อให้เริ่มต้นด้วยหน้า login
-      setUser(null);
-      setLoading(false);
+        if (savedUser && savedToken) {
+          // มี user data ใน localStorage แล้ว ให้ restore
+          const userData = JSON.parse(savedUser);
+          setUser(userData);
+        } else {
+          // ไม่มี user data ให้ clear เป็น null
+          setUser(null);
+        }
+      } catch (error) {
+        // กรณี localStorage มีปัญหา ให้ clear data
+        console.error('Error parsing user data:', error);
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
     };
     initAuth();
   }, []);

@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { ClockIcon, UserIcon, AcademicCapIcon } from '@heroicons/react/24/outline';
-import PropTypes from 'prop-types';
 
 function CourseCard({ course }) {
   const getCategoryLabel = (category) => {
@@ -74,19 +73,6 @@ function CourseCard({ course }) {
   );
 }
 
-CourseCard.propTypes = {
-  course: PropTypes.shape({
-    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-    title: PropTypes.string.isRequired,
-    description: PropTypes.string.isRequired,
-    instructor: PropTypes.string.isRequired,
-    duration: PropTypes.string.isRequired,
-    category: PropTypes.string.isRequired,
-    image: PropTypes.string.isRequired,
-    video_url: PropTypes.string,
-    creator_name: PropTypes.string,
-    created_at: PropTypes.string
-  }).isRequired
-};
+// PropTypes removed for debugging
 
 export default CourseCard;

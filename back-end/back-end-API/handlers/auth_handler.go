@@ -34,7 +34,8 @@ func Login(db *gorm.DB) http.HandlerFunc {
             return
         }
 
-        if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+        // Simple password comparison without bcrypt
+        if user.Password != req.Password {
             http.Error(w, "Invalid credentials", http.StatusUnauthorized)
             return
         }

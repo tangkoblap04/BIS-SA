@@ -5,7 +5,7 @@ export const authService = {
     try {
       console.log('Attempting login to:', `${BASE_URL}/login`);
       console.log('Login data:', { email, password });
-      
+
       const response = await fetch(`${BASE_URL}/login`, {
         method: 'POST',
         headers: {
@@ -16,20 +16,20 @@ export const authService = {
 
       console.log('Response status:', response.status);
       console.log('Response headers:', response.headers);
-      
+
       if (!response.ok) {
         const error = await response.json();
         console.log('Login error response:', error);
-        throw new Error(error.message || 'Login failed');
+        throw new Error(error.error || error.message || 'Login failed');
       }
 
       const data = await response.json();
       console.log('Login success response:', data);
-      
+
       // Store user data in localStorage
       localStorage.setItem('user', JSON.stringify(data.user));
       localStorage.setItem('token', data.token);
-      
+
       return data;
     } catch (error) {
       throw error;
