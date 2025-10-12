@@ -2,6 +2,7 @@ package main
 
 import (
     "database/sql"
+    "encoding/json"
     "fmt"
     "log"
     "net/http"
@@ -25,7 +26,7 @@ func getEnv(key, fallback string) string {
 
 func initDB() {
     var err error
-    host := getEnv("DB_HOST", "postgres-db")
+    host := getEnv("DB_HOST", "localhost")
     port := getEnv("DB_PORT", "5432")
     user := getEnv("DB_USER", "postgres")
     password := getEnv("DB_PASSWORD", "postgres")
@@ -65,9 +66,15 @@ func main() {
     config.AllowCredentials = false // Set to false when AllowAllOrigins is true
     r.Use(cors.New(config))
 
-    // Health check
+        // Health check endpoint
     r.GET("/api/health", func(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{"status": "ok"})
+    })
+
+    // Seed endpoint
+    r.POST("/seed", func(c *gin.Context) {
+        seedData(db)
+        c.JSON(http.StatusOK, gin.H{"message": "Database seeded successfully"})
     })
 
     // Routes
@@ -198,21 +205,35 @@ func main() {
 
         // Course endpoints
         api.POST("/courses", func(c *gin.Context) {
-            var course struct {
+            var req struct {
                 Title       string `json:"title"`
                 Description string `json:"description"`
                 Category    string `json:"category"`
                 Duration    int    `json:"duration"`
                 VideoURL    string `json:"video_url"`
+                Quiz        struct {
+                    Questions []struct {
+                        ID            int      `json:"id"`
+                        Question      string   `json:"question"`
+                        Options       []string `json:"options"`
+                        CorrectAnswer int      `json:"correctAnswer"`
+                    } `json:"questions"`
+                } `json:"quiz"`
+                WrittenExam struct {
+                    Questions []struct {
+                        ID       string `json:"id"`
+                        Question string `json:"question"`
+                    } `json:"questions"`
+                } `json:"writtenExam"`
             }
 
-            if err := c.BindJSON(&course); err != nil {
+            if err := c.BindJSON(&req); err != nil {
                 c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
                 return
             }
 
             // Validate required fields
-            if course.Title == "" {
+            if req.Title == "" {
                 c.JSON(http.StatusBadRequest, gin.H{"error": "Title is required"})
                 return
             }
@@ -221,28 +242,109 @@ func main() {
             // In production, get this from JWT token
             createdBy := 1
 
+            // Begin transaction
+            tx, err := db.Begin()
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+                return
+            }
+            defer tx.Rollback()
+
+            // Create course
             query := `
                 INSERT INTO courses (title, description, category, duration, video_url, created_by, created_at)
                 VALUES ($1, $2, $3, $4, $5, $6, NOW())
                 RETURNING id, created_at`
 
-            var id int
+            var courseID int
             var createdAt time.Time
-            err := db.QueryRow(query, course.Title, course.Description, course.Category, 
-                course.Duration, course.VideoURL, createdBy).Scan(&id, &createdAt)
+            err = tx.QueryRow(query, req.Title, req.Description, req.Category, 
+                req.Duration, req.VideoURL, createdBy).Scan(&courseID, &createdAt)
             if err != nil {
                 log.Printf("Failed to create course: %v", err)
                 c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
                 return
             }
 
+            // Create multiple choice exam if quiz questions exist
+            if len(req.Quiz.Questions) > 0 {
+                examQuery := `
+                    INSERT INTO exams (course_id, title, type, description, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW(), NOW())
+                    RETURNING id`
+
+                var mcExamID int
+                err = tx.QueryRow(examQuery, courseID, "แบบทดสอบปรนัย", "multiple_choice", "แบบทดสอบปรนัยสำหรับหลักสูตรนี้").Scan(&mcExamID)
+                if err != nil {
+                    log.Printf("Failed to create multiple choice exam: %v", err)
+                    c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create multiple choice exam"})
+                    return
+                }
+
+                // Create quiz questions
+                for _, q := range req.Quiz.Questions {
+                    if q.Question != "" { // Only create non-empty questions
+                        optionsJSON, _ := json.Marshal(q.Options)
+                        questionQuery := `
+                            INSERT INTO questions (exam_id, question_text, question_type, options, correct_answer, created_at, updated_at, points)
+                            VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), 1)`
+
+                        _, err = tx.Exec(questionQuery, mcExamID, q.Question, "multiple_choice", string(optionsJSON), q.CorrectAnswer)
+                        if err != nil {
+                            log.Printf("Failed to create quiz question: %v", err)
+                            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create quiz question"})
+                            return
+                        }
+                    }
+                }
+            }
+
+            // Create written exam if written questions exist
+            if len(req.WrittenExam.Questions) > 0 {
+                examQuery := `
+                    INSERT INTO exams (course_id, title, type, description, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW(), NOW())
+                    RETURNING id`
+
+                var writtenExamID int
+                err = tx.QueryRow(examQuery, courseID, "แบบทดสอบเขียน", "written", "แบบทดสอบเขียนสำหรับหลักสูตรนี้").Scan(&writtenExamID)
+                if err != nil {
+                    log.Printf("Failed to create written exam: %v", err)
+                    c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create written exam"})
+                    return
+                }
+
+                // Create written questions
+                for _, q := range req.WrittenExam.Questions {
+                    if q.Question != "" { // Only create non-empty questions
+                        questionQuery := `
+                            INSERT INTO questions (exam_id, question_text, question_type, created_at, updated_at, points)
+                            VALUES ($1, $2, $3, NOW(), NOW(), 1)`
+
+                        _, err = tx.Exec(questionQuery, writtenExamID, q.Question, "written")
+                        if err != nil {
+                            log.Printf("Failed to create written question: %v", err)
+                            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create written question"})
+                            return
+                        }
+                    }
+                }
+            }
+
+            // Commit transaction
+            err = tx.Commit()
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+                return
+            }
+
             c.JSON(http.StatusCreated, gin.H{
-                "id":          id,
-                "title":       course.Title,
-                "description": course.Description,
-                "category":    course.Category,
-                "duration":    course.Duration,
-                "video_url":   course.VideoURL,
+                "id":          courseID,
+                "title":       req.Title,
+                "description": req.Description,
+                "category":    req.Category,
+                "duration":    req.Duration,
+                "video_url":   req.VideoURL,
                 "created_by":  createdBy,
                 "created_at":  createdAt,
                 "message":     "Course created successfully",
@@ -349,6 +451,150 @@ func main() {
                     "created_at":   course.CreatedAt,
                     "creator_name": course.CreatorName,
                 },
+            })
+        })
+
+        // Exam endpoints
+        api.GET("/exams/course/:courseId", func(c *gin.Context) {
+            courseID := c.Param("courseId")
+            
+            // Query exams
+            examRows, err := db.Query(`
+                SELECT id, course_id, title, type, description, created_at 
+                FROM exams 
+                WHERE course_id = $1 AND deleted_at IS NULL
+            `, courseID)
+            
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch exams"})
+                return
+            }
+            defer examRows.Close()
+
+            var exams []map[string]interface{}
+            
+            for examRows.Next() {
+                var exam struct {
+                    ID          int       `json:"id"`
+                    CourseID    int       `json:"course_id"`
+                    Title       string    `json:"title"`
+                    Type        string    `json:"type"`
+                    Description string    `json:"description"`
+                    CreatedAt   time.Time `json:"created_at"`
+                }
+                
+                err := examRows.Scan(&exam.ID, &exam.CourseID, &exam.Title, &exam.Type, &exam.Description, &exam.CreatedAt)
+                if err != nil {
+                    continue
+                }
+
+                // Query questions for this exam
+                questionRows, err := db.Query(`
+                    SELECT id, question_text, question_type, options, correct_answer, points
+                    FROM questions 
+                    WHERE exam_id = $1 AND deleted_at IS NULL
+                `, exam.ID)
+                
+                if err != nil {
+                    continue
+                }
+
+                var questions []map[string]interface{}
+                for questionRows.Next() {
+                    var question struct {
+                        ID            int            `json:"id"`
+                        QuestionText  string         `json:"question_text"`
+                        QuestionType  string         `json:"question_type"`
+                        Options       sql.NullString `json:"options"`
+                        CorrectAnswer sql.NullString `json:"correct_answer"`
+                        Points        int            `json:"points"`
+                    }
+                    
+                    err := questionRows.Scan(&question.ID, &question.QuestionText, &question.QuestionType, 
+                        &question.Options, &question.CorrectAnswer, &question.Points)
+                    if err != nil {
+                        continue
+                    }
+                    
+                    // Parse options JSON for multiple choice questions
+                    var parsedOptions []string
+                    if question.QuestionType == "multiple_choice" && question.Options.Valid && question.Options.String != "" {
+                        json.Unmarshal([]byte(question.Options.String), &parsedOptions)
+                    }
+                    
+                    // Handle correct answer
+                    var correctAnswer interface{}
+                    if question.CorrectAnswer.Valid {
+                        correctAnswer = question.CorrectAnswer.String
+                    }
+                    
+                    questions = append(questions, map[string]interface{}{
+                        "id":             question.ID,
+                        "question":       question.QuestionText,
+                        "options":        parsedOptions,
+                        "correctAnswer":  correctAnswer,
+                        "points":         question.Points,
+                    })
+                }
+                questionRows.Close()
+
+                examMap := map[string]interface{}{
+                    "id":          exam.ID,
+                    "course_id":   exam.CourseID,
+                    "title":       exam.Title,
+                    "type":        exam.Type,
+                    "description": exam.Description,
+                    "created_at":  exam.CreatedAt,
+                    "questions":   questions,
+                }
+                
+                exams = append(exams, examMap)
+            }
+
+            c.JSON(http.StatusOK, gin.H{
+                "exams": exams,
+            })
+        })
+
+        api.POST("/exam-results", func(c *gin.Context) {
+            var examResult struct {
+                UserID   int                    `json:"user_id"`
+                CourseID int                    `json:"course_id"`
+                ExamID   int                    `json:"exam_id"`
+                Answers  map[string]interface{} `json:"answers"`
+            }
+
+            if err := c.BindJSON(&examResult); err != nil {
+                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+                return
+            }
+
+            // Convert answers to JSON string
+            answersJSON, err := json.Marshal(examResult.Answers)
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process answers"})
+                return
+            }
+
+            // คำนวณคะแนน (ตอนนี้ให้ 0 ก่อน สามารถปรับปรุงการคำนวณได้)
+            score := 0.0
+
+            var resultID int
+            err = db.QueryRow(`
+                INSERT INTO exam_results (user_id, course_id, exam_id, score, answers, created_at) 
+                VALUES ($1, $2, $3, $4, $5, NOW()) 
+                RETURNING id
+            `, examResult.UserID, examResult.CourseID, examResult.ExamID, score, string(answersJSON)).Scan(&resultID)
+
+            if err != nil {
+                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exam result"})
+                return
+            }
+
+            c.JSON(http.StatusOK, gin.H{
+                "message": "Exam submitted successfully",
+                "result_id": resultID,
+                "score": score,
             })
         })
     }

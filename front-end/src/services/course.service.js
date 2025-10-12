@@ -59,7 +59,8 @@ class CourseService {
                 throw new Error(error.error || 'Failed to fetch course');
             }
 
-            return await response.json();
+            const data = await response.json();
+            return data.course; // แกะข้อมูล course ออกมา
         } catch (error) {
             console.error('Get course error:', error);
             throw error;

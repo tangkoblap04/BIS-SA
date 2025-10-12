@@ -114,6 +114,20 @@ func CreateCourse(db *gorm.DB) gin.HandlerFunc {
 			Category    string `json:"category"`
 			Duration    int    `json:"duration"`
 			VideoURL    string `json:"video_url"`
+			Quiz        struct {
+				Questions []struct {
+					ID            int      `json:"id"`
+					Question      string   `json:"question"`
+					Options       []string `json:"options"`
+					CorrectAnswer int      `json:"correctAnswer"`
+				} `json:"questions"`
+			} `json:"quiz"`
+			WrittenExam struct {
+				Questions []struct {
+					ID       string `json:"id"`
+					Question string `json:"question"`
+				} `json:"questions"`
+			} `json:"writtenExam"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -128,6 +142,10 @@ func CreateCourse(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Begin transaction
+		tx := db.Begin()
+
+		// Create course
 		course := models.Course{
 			Title:       req.Title,
 			Description: req.Description,
@@ -137,10 +155,82 @@ func CreateCourse(db *gorm.DB) gin.HandlerFunc {
 			CreatedBy:   userID.(uint),
 		}
 
-		if err := db.Create(&course).Error; err != nil {
+		if err := tx.Create(&course).Error; err != nil {
+			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
 			return
 		}
+
+		// Create multiple choice exam if quiz questions exist
+		if len(req.Quiz.Questions) > 0 {
+			mcExam := models.Exam{
+				CourseID:    course.ID,
+				Title:       "แบบทดสอบปรนัย",
+				Type:        "multiple_choice",
+				Description: "แบบทดสอบปรนัยสำหรับหลักสูตรนี้",
+			}
+
+			if err := tx.Create(&mcExam).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create multiple choice exam"})
+				return
+			}
+
+			// Create quiz questions
+			for _, q := range req.Quiz.Questions {
+				if q.Question != "" { // Only create non-empty questions
+					question := models.Question{
+						ExamID:        mcExam.ID,
+						QuestionText:  q.Question,
+						QuestionType:  "multiple_choice",
+						Options:       q.Options,
+						CorrectAnswer: q.CorrectAnswer,
+					}
+
+					if err := tx.Create(&question).Error; err != nil {
+						tx.Rollback()
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create quiz question"})
+						return
+					}
+				}
+			}
+		}
+
+		// Create written exam if written questions exist
+		if len(req.WrittenExam.Questions) > 0 {
+			writtenExam := models.Exam{
+				CourseID:    course.ID,
+				Title:       "แบบทดสอบเขียน",
+				Type:        "written",
+				Description: "แบบทดสอบเขียนสำหรับหลักสูตรนี้",
+			}
+
+			if err := tx.Create(&writtenExam).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create written exam"})
+				return
+			}
+
+			// Create written questions
+			for _, q := range req.WrittenExam.Questions {
+				if q.Question != "" { // Only create non-empty questions
+					question := models.Question{
+						ExamID:       writtenExam.ID,
+						QuestionText: q.Question,
+						QuestionType: "written",
+					}
+
+					if err := tx.Create(&question).Error; err != nil {
+						tx.Rollback()
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create written question"})
+						return
+					}
+				}
+			}
+		}
+
+		// Commit transaction
+		tx.Commit()
 
 		// Load creator info
 		if err := db.Preload("Creator").First(&course, course.ID).Error; err != nil {

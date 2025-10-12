@@ -1,22 +1,46 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { examService } from '../../services/exam.service';
 
-function WrittenExam({ role, onComplete }) {
-  const [answers, setAnswers] = useState({
-    question1: '',
-    question2: ''
-  });
+function WrittenExam({ courseId, onComplete }) {
+  const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [exam, setExam] = useState(null);
 
-  const questions = [
-    {
-      id: 'question1',
-      question: 'จงอธิบายขั้นตอนการให้บริการลูกค้าตั้งแต่ลูกค้าเข้าร้านจนกระทั่งชำระเงิน'
-    },
-    {
-      id: 'question2',
-      question: 'หากเกิดสถานการณ์ที่ลูกค้าไม่พอใจการบริการ คุณจะมีวิธีการจัดการอย่างไร'
+  useEffect(() => {
+    fetchExams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
+
+  const fetchExams = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const exams = await examService.getExamsByCourseId(courseId);
+
+      // หา written exam
+      const writtenExam = exams.find(exam => exam.type === 'written');
+      if (writtenExam) {
+        setExam(writtenExam);
+        const examQuestions = writtenExam.questions || [];
+        setQuestions(examQuestions);
+
+        // สร้าง initial answers object
+        const initialAnswers = {};
+        examQuestions.forEach(q => {
+          initialAnswers[q.id] = '';
+        });
+        setAnswers(initialAnswers);
+      }
+    } catch (err) {
+      console.error('Error fetching written exams:', err);
+      setError('ไม่สามารถโหลดแบบทดสอบเขียนได้');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
   const handleAnswerChange = (questionId, value) => {
     setAnswers(prev => ({
@@ -25,7 +49,7 @@ function WrittenExam({ role, onComplete }) {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     // ตรวจสอบว่าตอบครบทุกข้อ
@@ -38,17 +62,72 @@ function WrittenExam({ role, onComplete }) {
 
     setSubmitted(true);
 
-    const examResult = {
-      userId: localStorage.getItem('userId'),
-      courseRole: role,
-      answers: answers,
-      completedAt: new Date().toISOString()
-    };
+    try {
+      // ส่งผลสอบไป backend
+      const examResult = {
+        user_id: parseInt(localStorage.getItem('userId') || '1'),
+        course_id: parseInt(courseId),
+        exam_id: exam.id,
+        answers: answers
+      };
 
-    if (onComplete) {
-      onComplete(examResult);
+      await examService.submitExamResult(examResult);
+
+      const result = {
+        userId: localStorage.getItem('userId'),
+        courseId: courseId,
+        examId: exam.id,
+        answers: answers,
+        completedAt: new Date().toISOString()
+      };
+
+      if (onComplete) {
+        onComplete(result);
+      }
+    } catch (error) {
+      console.error('Error submitting written exam result:', error);
+      // ยังคงไปต่อแม้จะส่งไม่สำเร็จ
+      if (onComplete) {
+        onComplete({
+          userId: localStorage.getItem('userId'),
+          courseId: courseId,
+          answers: answers,
+          completedAt: new Date().toISOString()
+        });
+      }
     }
   };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex justify-center items-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2">กำลังโหลดแบบทดสอบเขียน...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center text-red-600">
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!exam || questions.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center text-gray-600">
+          <p>ไม่พบแบบทดสอบเขียนสำหรับหลักสูตรนี้</p>
+        </div>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (
@@ -69,7 +148,7 @@ function WrittenExam({ role, onComplete }) {
 
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4">ข้อสอบข้อเขียน</h2>
+      <h2 className="text-2xl font-bold text-gray-800 mb-4">{exam.title}</h2>
       <p className="text-gray-600 mb-6">
         กรุณาตอบคำถามให้ครบทุกข้อ
       </p>
@@ -83,7 +162,7 @@ function WrittenExam({ role, onComplete }) {
               </span>
               <p className="text-lg text-gray-800">{question.question}</p>
             </div>
-            
+
             <div>
               <textarea
                 value={answers[question.id]}

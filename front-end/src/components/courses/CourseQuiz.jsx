@@ -1,21 +1,39 @@
-import { useState } from 'react';
-import { quizData } from '../../data/QuizData';
-const getRoleNameThai = (role) => {
-    const roleNames = {
-      manager: 'ผู้จัดการ',
-      waiter: 'พนักงานเสิร์ฟ',
-      cashier: 'แคชเชียร์',
-      service: 'พนักงานบริการทั่วไป'
-    };
-    return roleNames[role] || role;
-  };
-function CourseQuiz({ role, onComplete }) {
+import { useState, useEffect } from 'react';
+import { examService } from '../../services/exam.service';
+
+function CourseQuiz({ courseId, onComplete }) {
   const [answers, setAnswers] = useState({});
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [exam, setExam] = useState(null);
 
-  // ลบ currentQuestion state เพราะจะแสดงทุกข้อพร้อมกัน
-  const questions = quizData[role]?.questions || [];
+  useEffect(() => {
+    fetchExams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
+
+  const fetchExams = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const exams = await examService.getExamsByCourseId(courseId);
+
+      // หา multiple choice exam
+      const mcExam = exams.find(exam => exam.type === 'multiple_choice');
+      if (mcExam) {
+        setExam(mcExam);
+        setQuestions(mcExam.questions || []);
+      }
+    } catch (err) {
+      console.error('Error fetching exams:', err);
+      setError('ไม่สามารถโหลดแบบทดสอบได้');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAnswer = (questionId, answerIndex) => {
     setAnswers({
@@ -27,43 +45,97 @@ function CourseQuiz({ role, onComplete }) {
   const calculateScore = () => {
     let correctAnswers = 0;
     questions.forEach(question => {
-      if (answers[question.id] === question.correctAnswer) {
+      const correctAnswer = question.correctAnswer || question.correct_answer;
+      if (answers[question.id] === parseInt(correctAnswer)) {
         correctAnswers++;
       }
     });
     return (correctAnswers / questions.length) * 100;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (Object.keys(answers).length < questions.length) {
       alert('กรุณาตอบคำถามให้ครบทุกข้อ');
       return;
     }
-    
+
     const finalScore = calculateScore();
     setScore(finalScore);
     setShowResult(true);
-    
 
-    const quizResult = {
-      userId: localStorage.getItem('userId'),
-      courseRole: role,
-      score: finalScore,
-      answers: answers,
-      completedAt: new Date().toISOString()
-    };
+    try {
+      // ส่งผลสอบไป backend
+      const examResult = {
+        user_id: parseInt(localStorage.getItem('userId') || '1'),
+        course_id: parseInt(courseId),
+        exam_id: exam.id,
+        answers: answers
+      };
 
-    if (onComplete) {
-      onComplete(quizResult);
+      await examService.submitExamResult(examResult);
+
+      const quizResult = {
+        userId: localStorage.getItem('userId'),
+        courseId: courseId,
+        examId: exam.id,
+        score: finalScore,
+        answers: answers,
+        completedAt: new Date().toISOString()
+      };
+
+      if (onComplete) {
+        onComplete(quizResult);
+      }
+    } catch (error) {
+      console.error('Error submitting exam result:', error);
+      // ยังคงไปต่อแม้จะส่งไม่สำเร็จ
+      if (onComplete) {
+        onComplete({
+          userId: localStorage.getItem('userId'),
+          courseId: courseId,
+          score: finalScore,
+          answers: answers,
+          completedAt: new Date().toISOString()
+        });
+      }
     }
-  };
+  }; if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex justify-center items-center h-32">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2">กำลังโหลดแบบทดสอบ...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center text-red-600">
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!exam || questions.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="text-center text-gray-600">
+          <p>ไม่พบแบบทดสอบสำหรับหลักสูตรนี้</p>
+        </div>
+      </div>
+    );
+  }
 
   // ส่วนแสดงผลแบบทดสอบ (เมื่อยังทำไม่เสร็จ)
   if (!showResult) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">แบบทดสอบ</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">{exam.title}</h2>
           <div className="flex justify-between items-center">
             <p className="text-gray-600">
               กรุณาตอบคำถามทั้งหมด {questions.length} ข้อ
@@ -82,16 +154,16 @@ function CourseQuiz({ role, onComplete }) {
                   ข้อ {index + 1}
                 </span>
                 <p className="text-lg text-gray-800">
-                  {question.question}
+                  {question.question || question.question_text}
                 </p>
               </div>
-              
+
               <div className="space-y-3 ml-8">
                 {question.options.map((option, optIndex) => (
-                  <label 
+                  <label
                     key={optIndex}
                     className={`flex items-center p-3 rounded-lg border transition-all cursor-pointer
-                      ${answers[question.id] === optIndex 
+                      ${answers[question.id] === optIndex
                         ? 'border-blue-500 bg-blue-50'
                         : 'border-gray-200 hover:bg-gray-50'}`}
                   >
@@ -117,7 +189,7 @@ function CourseQuiz({ role, onComplete }) {
             className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
                      disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {Object.keys(answers).length < questions.length 
+            {Object.keys(answers).length < questions.length
               ? `ตอบคำถามอีก ${questions.length - Object.keys(answers).length} ข้อ`
               : 'ส่งคำตอบ'
             }
@@ -127,16 +199,16 @@ function CourseQuiz({ role, onComplete }) {
     );
   }
 
-    // แก้ไขส่วนแสดงผลการทดสอบ
-    if (showResult) {
+  // แก้ไขส่วนแสดงผลการทดสอบ
+  if (showResult) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold text-gray-800 mb-4">สรุปผลการทดสอบ</h2>
         <div className="text-center mb-8">
           <div className="mb-4">
-            <span className="text-sm text-gray-600">ตำแหน่ง</span>
+            <span className="text-sm text-gray-600">หลักสูตร</span>
             <h3 className="text-xl font-semibold text-gray-800">
-              {getRoleNameThai(role)}
+              {exam.title}
             </h3>
           </div>
 
@@ -172,7 +244,7 @@ function CourseQuiz({ role, onComplete }) {
           </div>
 
           <p className="text-gray-600 mb-2">
-            คุณตอบถูก {Math.round((score / 100) * questions.length)} ข้อ 
+            คุณตอบถูก {Math.round((score / 100) * questions.length)} ข้อ
             จากทั้งหมด {questions.length} ข้อ
           </p>
 
@@ -180,8 +252,8 @@ function CourseQuiz({ role, onComplete }) {
             <h4 className="font-semibold text-gray-700 mb-2">การประเมินผล</h4>
             <p className="text-gray-600">
               {score >= 80 ? '🌟 ยอดเยี่ยม! คุณพร้อมสำหรับการทำงานในตำแหน่งนี้' :
-              score >= 60 ? '👍 ดี! แต่ยังมีโอกาสพัฒนาได้อีก' :
-              'ควรทบทวนเนื้อหาและลองทำแบบทดสอบอีกครั้ง'}
+                score >= 60 ? '👍 ดี! แต่ยังมีโอกาสพัฒนาได้อีก' :
+                  'ควรทบทวนเนื้อหาและลองทำแบบทดสอบอีกครั้ง'}
             </p>
           </div>
 
@@ -218,13 +290,13 @@ function CourseQuiz({ role, onComplete }) {
                 {question.question}
               </p>
             </div>
-            
+
             <div className="space-y-3 ml-8">
               {question.options.map((option, index) => (
-                <label 
+                <label
                   key={index}
                   className={`flex items-center p-3 rounded-lg border transition-all cursor-pointer
-                    ${answers[question.id] === index 
+                    ${answers[question.id] === index
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-200 hover:bg-gray-50'}`}
                 >
@@ -250,7 +322,7 @@ function CourseQuiz({ role, onComplete }) {
           className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 
                      disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {Object.keys(answers).length < questions.length 
+          {Object.keys(answers).length < questions.length
             ? `ตอบคำถามอีก ${questions.length - Object.keys(answers).length} ข้อ`
             : 'ส่งคำตอบ'
           }

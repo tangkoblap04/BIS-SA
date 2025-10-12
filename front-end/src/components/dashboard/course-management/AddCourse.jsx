@@ -68,6 +68,8 @@ function AddCourse() {
         category: newCourse.category,
         duration: parseInt(newCourse.duration) || 0,
         video_url: newCourse.video_url,
+        quiz: newCourse.quiz,
+        writtenExam: newCourse.writtenExam
       };
 
       console.log('Creating course:', courseData);
