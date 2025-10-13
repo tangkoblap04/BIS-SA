@@ -10,6 +10,8 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import WriteExamAnswers from './WriteExamAnswers';
 import CourseManagement from './CourseManagement';
 import AddUser from '../AddUser';
@@ -90,6 +92,151 @@ function HRDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    const currentDate = new Date().toLocaleDateString('th-TH', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    // Title
+    doc.setFontSize(18);
+    doc.text('HR Dashboard Report', 14, 20);
+
+    doc.setFontSize(11);
+    doc.text(`Generated: ${currentDate}`, 14, 28);
+    doc.text('BIS-SA Training Management System', 14, 34);
+
+    let yPosition = 45;
+
+    // 1. Employee Training Assignment Statistics
+    doc.setFontSize(14);
+    doc.text('1. Employee Training Assignment', 14, yPosition);
+    yPosition += 10;
+
+    autoTable(doc, {
+      startY: yPosition,
+      head: [['Category', 'Count', 'Percentage']],
+      body: [
+        ['Total Employees', employeeStats.total.toString(), '100%'],
+        ['Assigned to Training', employeeStats.assigned.toString(),
+          `${((employeeStats.assigned / employeeStats.total) * 100).toFixed(1)}%`],
+        ['Not Assigned', employeeStats.unassigned.toString(),
+          `${((employeeStats.unassigned / employeeStats.total) * 100).toFixed(1)}%`],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] },
+      margin: { left: 14 }
+    });
+
+    yPosition = doc.lastAutoTable.finalY + 15;
+
+    // 2. Training Scores Overview
+    doc.setFontSize(14);
+    doc.text('2. Training Scores Overview', 14, yPosition);
+    yPosition += 10;
+
+    if (examScores.scoreCount > 0) {
+      autoTable(doc, {
+        startY: yPosition,
+        head: [['Metric', 'Value']],
+        body: [
+          ['Total Exams', examScores.scoreCount.toString()],
+          ['Highest Score', `${examScores.maxScore.toFixed(1)}%`],
+          ['Average Score', `${examScores.avgScore.toFixed(1)}%`],
+          ['Lowest Score', `${examScores.minScore.toFixed(1)}%`],
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229] },
+        margin: { left: 14 }
+      });
+
+      yPosition = doc.lastAutoTable.finalY + 10;
+
+      // Recent Scores Table
+      doc.setFontSize(12);
+      doc.text('Recent Exam Scores:', 14, yPosition);
+      yPosition += 5;
+
+      const scoresData = examScores.scores.slice(0, 10).map(score => [
+        score.name,
+        score.course_title,
+        score.exam_title,
+        `${score.score.toFixed(1)}%`
+      ]);
+
+      autoTable(doc, {
+        startY: yPosition,
+        head: [['Student Name', 'Course', 'Exam', 'Score']],
+        body: scoresData,
+        theme: 'striped',
+        headStyles: { fillColor: [79, 70, 229] },
+        margin: { left: 14 },
+        styles: { fontSize: 9 },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 50 },
+          2: { cellWidth: 50 },
+          3: { cellWidth: 25 }
+        }
+      });
+
+      yPosition = doc.lastAutoTable.finalY + 15;
+    } else {
+      doc.setFontSize(10);
+      doc.text('No exam scores available yet.', 14, yPosition);
+      yPosition += 15;
+    }
+
+    // 3. Course Progress Overview
+    if (yPosition > 250) {
+      doc.addPage();
+      yPosition = 20;
+    }
+
+    doc.setFontSize(14);
+    doc.text('3. Course Progress Overview', 14, yPosition);
+    yPosition += 10;
+
+    if (courseProgress.length > 0) {
+      const progressData = courseProgress.map(course => [
+        course.name,
+        course.total.toString(),
+        course.completed.toString(),
+        `${((course.completed / course.total) * 100).toFixed(1)}%`
+      ]);
+
+      autoTable(doc, {
+        startY: yPosition,
+        head: [['Course Name', 'Total Enrolled', 'Completed', 'Completion Rate']],
+        body: progressData,
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229] },
+        margin: { left: 14 }
+      });
+    } else {
+      doc.setFontSize(10);
+      doc.text('No course progress data available yet.', 14, yPosition);
+    }
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        doc.internal.pageSize.getWidth() / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'center' }
+      );
+    }
+
+    // Save PDF
+    doc.save(`HR-Dashboard-Report-${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const pieChartData = {
@@ -294,7 +441,7 @@ function HRDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* HR Navbar */}
-      <HRNavbar />
+      <HRNavbar onExportPDF={activeTab === 'dashboard' ? exportToPDF : null} />
 
       <div className="flex">
         {/* Sidebar */}

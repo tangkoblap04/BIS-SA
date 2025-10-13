@@ -8,6 +8,8 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/gorilla/mux v1.8.1
 	github.com/lib/pq v1.10.9
+	github.com/swaggo/files v1.0.1
+	github.com/swaggo/gin-swagger v1.6.1
 	github.com/swaggo/swag v1.16.6
 	golang.org/x/crypto v0.40.0
 	gorm.io/gorm v1.31.0

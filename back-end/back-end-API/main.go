@@ -13,6 +13,11 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
+
+	// Swagger imports
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	_ "github.com/tangkoblap04/BIS-SA/back-end/back-end-API/docs"
 )
 
 var db *sql.DB
@@ -82,6 +87,9 @@ func main() {
 	r.GET("/api/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+
+	// Swagger documentation
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Routes
 	api := r.Group("/api")
@@ -296,10 +304,42 @@ func main() {
 		api.DELETE("/users/:id", func(c *gin.Context) {
 			userID := c.Param("id")
 
-			// Hard delete from database
-			query := `DELETE FROM users WHERE id = $1`
+			// Start a transaction
+			tx, err := db.Begin()
+			if err != nil {
+				log.Printf("Error starting transaction: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+				return
+			}
+			defer tx.Rollback()
 
-			result, err := db.Exec(query, userID)
+			// Delete related records first (to handle foreign key constraints)
+
+			// 1. Delete exam results
+			_, err = tx.Exec("DELETE FROM exam_results WHERE user_id = $1", userID)
+			if err != nil {
+				log.Printf("Error deleting exam results: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user data"})
+				return
+			}
+
+			// 2. Delete course access
+			_, err = tx.Exec("DELETE FROM course_access WHERE user_id = $1", userID)
+			if err != nil {
+				log.Printf("Error deleting course access: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user data"})
+				return
+			}
+
+			// 3. Delete course progress (if exists)
+			_, err = tx.Exec("DELETE FROM course_progress WHERE user_id = $1", userID)
+			if err != nil {
+				log.Printf("Error deleting course progress: %v", err)
+				// Continue anyway as this table might not have data
+			}
+
+			// 4. Finally, delete the user
+			result, err := tx.Exec("DELETE FROM users WHERE id = $1", userID)
 			if err != nil {
 				log.Printf("Error deleting user: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
@@ -317,6 +357,14 @@ func main() {
 				return
 			}
 
+			// Commit the transaction
+			if err = tx.Commit(); err != nil {
+				log.Printf("Error committing transaction: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+				return
+			}
+
+			log.Printf("User %s deleted successfully with all related data", userID)
 			c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
 		})
 
