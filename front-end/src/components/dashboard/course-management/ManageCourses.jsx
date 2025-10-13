@@ -1,15 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { ClockIcon, UserIcon, EyeIcon } from '@heroicons/react/24/outline';
 import { courseService } from '../../../services/course.service';
+import { userService } from '../../../services/user.service';
+import { COURSE_CATEGORIES } from '../../../constants/categories';
 
 function ManageCourses() {
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
     fetchCourses();
+    fetchUsers();
   }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const data = await userService.getAllUsers();
+      const userList = data.users || data || [];
+      // Filter out HR users, only show employees
+      setUsers(userList.filter(u => u.role === 'employee'));
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
 
   const fetchCourses = async () => {
     try {
@@ -35,7 +50,21 @@ function ManageCourses() {
   };
 
   const handleEdit = async (course) => {
-    setSelectedCourse({ ...course });
+    // Fetch course access if visibility is 'specific'
+    let selectedUsers = [];
+    if (course.visibility === 'specific') {
+      try {
+        const accessData = await courseService.getCourseAccess(course.id);
+        selectedUsers = accessData.users || [];
+      } catch (error) {
+        console.error('Error fetching course access:', error);
+      }
+    }
+
+    setSelectedCourse({
+      ...course,
+      selectedUsers: selectedUsers
+    });
     setIsEditModalOpen(true);
   };
 
@@ -46,7 +75,9 @@ function ManageCourses() {
         description: selectedCourse.description,
         category: selectedCourse.category,
         duration: parseInt(selectedCourse.duration) || 0,
-        video_url: selectedCourse.video_url
+        video_url: selectedCourse.video_url,
+        visibility: selectedCourse.visibility || 'all',
+        selectedUsers: selectedCourse.visibility === 'specific' ? (selectedCourse.selectedUsers || []) : []
       };
 
       await courseService.updateCourse(selectedCourse.id, updateData);
@@ -62,14 +93,6 @@ function ManageCourses() {
 
   const EditModal = () => {
     if (!selectedCourse) return null;
-
-    const categories = [
-      { value: 'management', label: 'การจัดการ' },
-      { value: 'customer-service', label: 'การบริการลูกค้า' },
-      { value: 'technical', label: 'เทคนิค' },
-      { value: 'soft-skills', label: 'ทักษะส่วนบุคคล' },
-      { value: 'compliance', label: 'การปฏิบัติตามกฎระเบียบ' }
-    ];
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -124,9 +147,9 @@ function ManageCourses() {
                   required
                 >
                   <option value="">เลือกหมวดหมู่</option>
-                  {categories.map((cat) => (
+                  {COURSE_CATEGORIES.map((cat) => (
                     <option key={cat.value} value={cat.value}>
-                      {cat.label}
+                      {cat.icon} {cat.label}
                     </option>
                   ))}
                 </select>
@@ -165,6 +188,86 @@ function ManageCourses() {
                 placeholder="https://www.youtube.com/watch?v=..."
                 required
               />
+            </div>
+
+            {/* Visibility Settings */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                การมองเห็น
+              </label>
+              <select
+                value={selectedCourse.visibility || 'all'}
+                onChange={(e) => {
+                  setSelectedCourse({
+                    ...selectedCourse,
+                    visibility: e.target.value,
+                    selectedUsers: [] // Reset selected users when changing visibility
+                  });
+                }}
+                className="w-full p-2 border border-gray-300 rounded-md mb-2"
+                required
+              >
+                <option value="all">เปิดให้ทุกคนเห็น</option>
+                <option value="specific">เลือกผู้ใช้เฉพาะ</option>
+                <option value="hidden">ซ่อนจากทุกคน</option>
+              </select>
+
+              {selectedCourse.visibility === 'specific' && (
+                <div className="mt-4 space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    เลือกผู้ใช้ที่สามารถเห็นคอร์สนี้
+                  </label>
+                  <div className="border border-gray-300 rounded-md p-3 max-h-60 overflow-y-auto bg-gray-50">
+                    {users.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-2">ไม่พบผู้ใช้ในระบบ</p>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(selectedCourse.selectedUsers || []).length === users.length}
+                            onChange={(e) => {
+                              const allUserIds = users.map(u => u.id);
+                              setSelectedCourse({
+                                ...selectedCourse,
+                                selectedUsers: e.target.checked ? allUserIds : []
+                              });
+                            }}
+                            className="h-4 w-4 text-blue-600 rounded"
+                          />
+                          <span className="text-sm font-medium text-gray-700">เลือกทั้งหมด</span>
+                        </label>
+                        <div className="border-t border-gray-200 my-2"></div>
+                        {users.map((user) => (
+                          <label key={user.id} className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(selectedCourse.selectedUsers || []).includes(user.id)}
+                              onChange={(e) => {
+                                const currentUsers = selectedCourse.selectedUsers || [];
+                                const updatedUsers = e.target.checked
+                                  ? [...currentUsers, user.id]
+                                  : currentUsers.filter(id => id !== user.id);
+                                setSelectedCourse({ ...selectedCourse, selectedUsers: updatedUsers });
+                              }}
+                              className="h-4 w-4 text-blue-600 rounded"
+                            />
+                            <div className="flex-1">
+                              <span className="text-sm text-gray-700 font-medium">{user.name}</span>
+                              <span className="text-xs text-gray-500 ml-2">({user.email})</span>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {(selectedCourse.selectedUsers || []).length > 0 && (
+                    <p className="text-xs text-gray-600 mt-2">
+                      เลือกแล้ว: {(selectedCourse.selectedUsers || []).length} คน
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

@@ -29,6 +29,37 @@ fi
 echo -e "${BLUE}📂 เข้าไปใน workspace directory${NC}"
 cd /workspaces/BIS-SA
 
+# 0. เริ่มต้น Docker Containers
+echo -e "${YELLOW}🐳 ตรวจสอบและเริ่ม Docker Containers...${NC}"
+
+# ตรวจสอบว่า Docker daemon รันอยู่หรือไม่
+if ! docker info > /dev/null 2>&1; then
+    echo -e "${RED}❌ Docker daemon ไม่ทำงาน กรุณาเริ่ม Docker ก่อน${NC}"
+    exit 1
+fi
+
+# เริ่ม PostgreSQL container
+if ! docker ps | grep -q "back-end-postgres-db-1"; then
+    echo -e "${BLUE}🗄️ เริ่ม PostgreSQL container...${NC}"
+    docker start back-end-postgres-db-1 > /dev/null 2>&1
+    
+    # รอให้ PostgreSQL พร้อม
+    echo -e "${BLUE}⏳ รอให้ PostgreSQL พร้อม...${NC}"
+    for i in {1..30}; do
+        if docker exec back-end-postgres-db-1 pg_isready -U postgres > /dev/null 2>&1; then
+            echo -e "${GREEN}✅ PostgreSQL พร้อมใช้งาน${NC}"
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            echo -e "${RED}❌ PostgreSQL ไม่พร้อมใช้งาน${NC}"
+            exit 1
+        fi
+        sleep 1
+    done
+else
+    echo -e "${GREEN}✅ PostgreSQL container รันอยู่แล้ว${NC}"
+fi
+
 # 1. เริ่มต้น Backend
 echo -e "${YELLOW}🗄️ เริ่มต้น Backend Server...${NC}"
 cd /workspaces/BIS-SA/back-end/back-end-API

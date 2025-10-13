@@ -47,6 +47,26 @@ class ExamService {
             throw error;
         }
     }
+
+    // ดึงคำตอบข้อสอบข้อเขียนตาม course ID
+    async getWrittenExamAnswers(courseId) {
+        try {
+            const response = await fetch(`${BASE_URL}/written-exam-answers/${courseId}`, {
+                headers: authService.getAuthHeader()
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to fetch written exam answers');
+            }
+
+            const data = await response.json();
+            return data.answers || [];
+        } catch (error) {
+            console.error('Get written exam answers error:', error);
+            throw error;
+        }
+    }
 }
 
 export const examService = new ExamService();

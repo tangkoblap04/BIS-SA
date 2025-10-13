@@ -12,7 +12,6 @@ import {
 } from 'chart.js';
 import WriteExamAnswers from './WriteExamAnswers';
 import CourseManagement from './CourseManagement';
-import CourseList from './course-management/CourseList';
 import AddUser from '../AddUser';
 import ManageUsers from '../ManageUsers';
 import EditUser from '../EditUser';
@@ -125,10 +124,6 @@ function HRDashboard() {
         return <WriteExamAnswers />;
       case 'course-management':
         return <CourseManagement activeSection="list" />;
-      case 'create-course':
-        return <CourseManagement activeSection="add" />;
-      case 'course-list':
-        return <CourseList />;
       case 'add-user':
         return <AddUser />;
       case 'manage-users':
@@ -270,24 +265,6 @@ function HRDashboard() {
                   }`}
               >
                 📚 Course Management
-              </button>
-              <button
-                onClick={() => setActiveTab('create-course')}
-                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'create-course'
-                  ? 'bg-blue-100 text-blue-700 font-medium'
-                  : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-              >
-                ➕ Create Course
-              </button>
-              <button
-                onClick={() => setActiveTab('course-list')}
-                className={`w-full text-left px-4 py-3 rounded-md transition-colors ${activeTab === 'course-list'
-                  ? 'bg-blue-100 text-blue-700 font-medium'
-                  : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-              >
-                👁️ View All Courses
               </button>
               <button
                 onClick={() => setActiveTab('add-user')}

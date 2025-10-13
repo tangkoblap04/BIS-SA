@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { examService } from '../../services/exam.service';
+import { authService } from '../../services/auth.service';
 
 function CourseQuiz({ courseId, onComplete }) {
   const [answers, setAnswers] = useState({});
@@ -64,18 +65,28 @@ function CourseQuiz({ courseId, onComplete }) {
     setShowResult(true);
 
     try {
+      // ดึงข้อมูล user ที่ login อยู่
+      const currentUser = authService.getCurrentUser();
+
+      if (!currentUser || !currentUser.id) {
+        alert('ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบใหม่');
+        return;
+      }
+
       // ส่งผลสอบไป backend
       const examResult = {
-        user_id: parseInt(localStorage.getItem('userId') || '1'),
+        user_id: currentUser.id, // ใช้ user id จาก user object
         course_id: parseInt(courseId),
         exam_id: exam.id,
         answers: answers
       };
 
+      console.log('Submitting quiz result:', examResult); // สำหรับ debug
+
       await examService.submitExamResult(examResult);
 
       const quizResult = {
-        userId: localStorage.getItem('userId'),
+        userId: currentUser.id,
         courseId: courseId,
         examId: exam.id,
         score: finalScore,
@@ -88,18 +99,11 @@ function CourseQuiz({ courseId, onComplete }) {
       }
     } catch (error) {
       console.error('Error submitting exam result:', error);
-      // ยังคงไปต่อแม้จะส่งไม่สำเร็จ
-      if (onComplete) {
-        onComplete({
-          userId: localStorage.getItem('userId'),
-          courseId: courseId,
-          score: finalScore,
-          answers: answers,
-          completedAt: new Date().toISOString()
-        });
-      }
+      alert('เกิดข้อผิดพลาดในการส่งคำตอบ: ' + error.message);
     }
-  }; if (loading) {
+  };
+
+  if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex justify-center items-center h-32">

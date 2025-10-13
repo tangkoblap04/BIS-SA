@@ -15,6 +15,7 @@ CREATE TABLE courses (
     category VARCHAR(100),
     duration INTEGER DEFAULT 0, -- duration in minutes
     video_url TEXT,
+    visibility VARCHAR(50) DEFAULT 'all' CHECK (visibility IN ('all', 'specific', 'hidden')), -- 'all' = everyone, 'specific' = selected users only, 'hidden' = no one can see
     created_by INTEGER REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -65,4 +66,14 @@ CREATE TABLE exam_results (
     score FLOAT DEFAULT 0,
     answers TEXT, -- JSON string
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table for managing course access permissions (which users can see which courses)
+CREATE TABLE course_access (
+    id SERIAL PRIMARY KEY,
+    course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    granted_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(course_id, user_id)
 );

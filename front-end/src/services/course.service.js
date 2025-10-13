@@ -29,9 +29,15 @@ class CourseService {
     }
 
     // ดึงข้อมูลคอร์สทั้งหมด
-    async getAllCourses() {
+    async getAllCourses(userId = null) {
         try {
-            const response = await fetch(`${BASE_URL}/courses`, {
+            let url = `${BASE_URL}/courses`;
+            // If userId is provided, add it as query parameter for access filtering
+            if (userId) {
+                url += `?user_id=${userId}`;
+            }
+
+            const response = await fetch(url, {
                 headers: authService.getAuthHeader()
             });
 
@@ -107,6 +113,25 @@ class CourseService {
             return await response.json();
         } catch (error) {
             console.error('Delete course error:', error);
+            throw error;
+        }
+    }
+
+    // ดึงข้อมูล course access (users who can access a course)
+    async getCourseAccess(courseId) {
+        try {
+            const response = await fetch(`${BASE_URL}/courses/${courseId}/access`, {
+                headers: authService.getAuthHeader()
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to fetch course access');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Get course access error:', error);
             throw error;
         }
     }

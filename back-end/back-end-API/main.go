@@ -1,937 +1,1188 @@
 package main
 
 import (
-    "database/sql"
-    "encoding/json"
-    "fmt"
-    "log"
-    "net/http"
-    "os"
-    "time"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"time"
 
-    "github.com/gin-contrib/cors"
-    "github.com/gin-gonic/gin"
-    "github.com/dgrijalva/jwt-go"
-    _ "github.com/lib/pq"
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	_ "github.com/lib/pq"
 )
 
 var db *sql.DB
 
 func getEnv(key, fallback string) string {
-    if value, exists := os.LookupEnv(key); exists {
-        return value
-    }
-    return fallback
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return fallback
 }
 
 func initDB() {
-    var err error
-    host := getEnv("DB_HOST", "localhost")
-    port := getEnv("DB_PORT", "5432")
-    user := getEnv("DB_USER", "postgres")
-    password := getEnv("DB_PASSWORD", "postgres")
-    dbname := getEnv("DB_NAME", "postgres")
+	var err error
+	host := getEnv("DB_HOST", "localhost")
+	port := getEnv("DB_PORT", "5432")
+	user := getEnv("DB_USER", "postgres")
+	password := getEnv("DB_PASSWORD", "postgres")
+	dbname := getEnv("DB_NAME", "postgres")
 
-    connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-        host, port, user, password, dbname)
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
 
-    db, err = sql.Open("postgres", connStr)
-    if err != nil {
-        log.Fatal("Failed to open database:", err)
-    }
+	db, err = sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatal("Failed to open database:", err)
+	}
 
-    db.SetMaxOpenConns(25)
-    db.SetMaxIdleConns(20)
-    db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(20)
+	db.SetConnMaxLifetime(5 * time.Minute)
 
-    // Retry connection with exponential backoff
-    maxRetries := 10
-    for i := 0; i < maxRetries; i++ {
-        err = db.Ping()
-        if err == nil {
-            log.Println("Successfully connected to database")
-            return
-        }
-        
-        log.Printf("Failed to ping database (attempt %d/%d): %v", i+1, maxRetries, err)
-        if i < maxRetries-1 {
-            sleepTime := time.Duration(i+1) * 2 * time.Second
-            log.Printf("Retrying in %v...", sleepTime)
-            time.Sleep(sleepTime)
-        }
-    }
-    
-    log.Fatal("Failed to connect to database after all retries")
+	// Retry connection with exponential backoff
+	maxRetries := 10
+	for i := 0; i < maxRetries; i++ {
+		err = db.Ping()
+		if err == nil {
+			log.Println("Successfully connected to database")
+			return
+		}
+
+		log.Printf("Failed to ping database (attempt %d/%d): %v", i+1, maxRetries, err)
+		if i < maxRetries-1 {
+			sleepTime := time.Duration(i+1) * 2 * time.Second
+			log.Printf("Retrying in %v...", sleepTime)
+			time.Sleep(sleepTime)
+		}
+	}
+
+	log.Fatal("Failed to connect to database after all retries")
 }
 
 func main() {
-    initDB()
-    defer db.Close()
+	initDB()
+	defer db.Close()
 
-    r := gin.Default()
+	r := gin.Default()
 
-    // CORS configuration
-    config := cors.DefaultConfig()
-    config.AllowAllOrigins = true
-    config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-    config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
-    config.AllowCredentials = false // Set to false when AllowAllOrigins is true
-    r.Use(cors.New(config))
+	// CORS configuration
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+	config.AllowCredentials = false // Set to false when AllowAllOrigins is true
+	r.Use(cors.New(config))
 
-        // Health check endpoint
-    r.GET("/api/health", func(c *gin.Context) {
-        c.JSON(http.StatusOK, gin.H{"status": "ok"})
-    })
+	// Health check endpoint
+	r.GET("/api/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 
-    // Seed endpoint
-    r.POST("/seed", func(c *gin.Context) {
-        seedData(db)
-        c.JSON(http.StatusOK, gin.H{"message": "Database seeded successfully"})
-    })
+	// Routes
+	api := r.Group("/api")
+	{
+		api.POST("/users", func(c *gin.Context) {
+			var user struct {
+				Name     string `json:"name"`
+				Email    string `json:"email"`
+				Password string `json:"password"`
+				Role     string `json:"role"`
+			}
 
-    // Routes
-    api := r.Group("/api")
-    {
-        api.POST("/users", func(c *gin.Context) {
-            var user struct {
-                Name     string `json:"name"`
-                Email    string `json:"email"`
-                Password string `json:"password"`
-                Role     string `json:"role"`
-            }
+			if err := c.BindJSON(&user); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 
-            if err := c.BindJSON(&user); err != nil {
-                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-                return
-            }
+			// Validate role
+			if user.Role != "HR" && user.Role != "employee" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Must be 'HR' or 'employee'"})
+				return
+			}
 
-            // Validate role
-            if user.Role != "HR" && user.Role != "employee" {
-                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Must be 'HR' or 'employee'"})
-                return
-            }
+			// Check if email already exists
+			var existingCount int
+			checkQuery := "SELECT COUNT(*) FROM users WHERE email = $1"
+			err := db.QueryRow(checkQuery, user.Email).Scan(&existingCount)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+				return
+			}
+			if existingCount > 0 {
+				c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+				return
+			}
 
-            // Check if email already exists
-            var existingCount int
-            checkQuery := "SELECT COUNT(*) FROM users WHERE email = $1"
-            err := db.QueryRow(checkQuery, user.Email).Scan(&existingCount)
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-                return
-            }
-            if existingCount > 0 {
-                c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
-                return
-            }
-
-            query := `
+			query := `
                 INSERT INTO users (name, email, password, role)
                 VALUES ($1, $2, $3, $4)
                 RETURNING id`
 
-            var id int
-            err = db.QueryRow(query, user.Name, user.Email, user.Password, user.Role).Scan(&id)
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
-                return
-            }
+			var id int
+			err = db.QueryRow(query, user.Name, user.Email, user.Password, user.Role).Scan(&id)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+				return
+			}
 
-            c.JSON(http.StatusCreated, gin.H{
-                "id": id,
-                "name": user.Name,
-                "email": user.Email,
-                "role": user.Role,
-                "message": "User created successfully",
-            })
-        })
+			c.JSON(http.StatusCreated, gin.H{
+				"id":      id,
+				"name":    user.Name,
+				"email":   user.Email,
+				"role":    user.Role,
+				"message": "User created successfully",
+			})
+		})
 
-        // GET all users (for HR)
-        api.GET("/users", func(c *gin.Context) {
-            rows, err := db.Query(`
+		// GET all users (for HR)
+		api.GET("/users", func(c *gin.Context) {
+			rows, err := db.Query(`
                 SELECT id, name, email, role, created_at 
                 FROM users 
                 ORDER BY created_at DESC
             `)
-            if err != nil {
-                log.Printf("Error fetching users: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
-                return
-            }
-            defer rows.Close()
+			if err != nil {
+				log.Printf("Error fetching users: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
+				return
+			}
+			defer rows.Close()
 
-            var users []map[string]interface{}
-            for rows.Next() {
-                var user struct {
-                    ID        int       `json:"id"`
-                    Name      string    `json:"name"`
-                    Email     string    `json:"email"`
-                    Role      string    `json:"role"`
-                    CreatedAt time.Time `json:"created_at"`
-                }
+			var users []map[string]interface{}
+			for rows.Next() {
+				var user struct {
+					ID        int       `json:"id"`
+					Name      string    `json:"name"`
+					Email     string    `json:"email"`
+					Role      string    `json:"role"`
+					CreatedAt time.Time `json:"created_at"`
+				}
 
-                err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.CreatedAt)
-                if err != nil {
-                    continue
-                }
+				err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.CreatedAt)
+				if err != nil {
+					continue
+				}
 
-                users = append(users, map[string]interface{}{
-                    "id":         user.ID,
-                    "name":       user.Name,
-                    "email":      user.Email,
-                    "role":       user.Role,
-                    "created_at": user.CreatedAt,
-                })
-            }
+				users = append(users, map[string]interface{}{
+					"id":         user.ID,
+					"name":       user.Name,
+					"email":      user.Email,
+					"role":       user.Role,
+					"created_at": user.CreatedAt,
+				})
+			}
 
-            if users == nil {
-                users = []map[string]interface{}{}
-            }
+			if users == nil {
+				users = []map[string]interface{}{}
+			}
 
-            c.JSON(http.StatusOK, gin.H{"users": users})
-        })
+			c.JSON(http.StatusOK, gin.H{"users": users})
+		})
 
-        // GET user by ID
-        api.GET("/users/:id", func(c *gin.Context) {
-            userID := c.Param("id")
+		// GET user by ID
+		api.GET("/users/:id", func(c *gin.Context) {
+			userID := c.Param("id")
 
-            var user struct {
-                ID        int       `json:"id"`
-                Name      string    `json:"name"`
-                Email     string    `json:"email"`
-                Role      string    `json:"role"`
-                CreatedAt time.Time `json:"created_at"`
-            }
+			var user struct {
+				ID        int       `json:"id"`
+				Name      string    `json:"name"`
+				Email     string    `json:"email"`
+				Role      string    `json:"role"`
+				CreatedAt time.Time `json:"created_at"`
+			}
 
-            err := db.QueryRow(`
+			err := db.QueryRow(`
                 SELECT id, name, email, role, created_at 
                 FROM users 
                 WHERE id = $1
             `, userID).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.CreatedAt)
 
-            if err != nil {
-                log.Printf("Error fetching user: %v", err)
-                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-                return
-            }
+			if err != nil {
+				log.Printf("Error fetching user: %v", err)
+				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+				return
+			}
 
-            c.JSON(http.StatusOK, user)
-        })
+			c.JSON(http.StatusOK, user)
+		})
 
-        // PUT (Update) user by ID
-        api.PUT("/users/:id", func(c *gin.Context) {
-            userID := c.Param("id")
+		// PUT (Update) user by ID
+		api.PUT("/users/:id", func(c *gin.Context) {
+			userID := c.Param("id")
 
-            var updateData struct {
-                Name     string `json:"name"`
-                Email    string `json:"email"`
-                Role     string `json:"role"`
-                Password string `json:"password,omitempty"`
-            }
+			var updateData struct {
+				Name     string `json:"name"`
+				Email    string `json:"email"`
+				Role     string `json:"role"`
+				Password string `json:"password,omitempty"`
+			}
 
-            if err := c.BindJSON(&updateData); err != nil {
-                log.Printf("Error binding JSON: %v", err)
-                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-                return
-            }
+			if err := c.BindJSON(&updateData); err != nil {
+				log.Printf("Error binding JSON: %v", err)
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 
-            // Validate role
-            if updateData.Role != "HR" && updateData.Role != "employee" {
-                c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Must be 'HR' or 'employee'"})
-                return
-            }
+			// Validate role
+			if updateData.Role != "HR" && updateData.Role != "employee" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role. Must be 'HR' or 'employee'"})
+				return
+			}
 
-            // Check if email already exists for other users
-            var existingCount int
-            checkQuery := "SELECT COUNT(*) FROM users WHERE email = $1 AND id != $2"
-            err := db.QueryRow(checkQuery, updateData.Email, userID).Scan(&existingCount)
-            if err != nil {
-                log.Printf("Error checking email: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-                return
-            }
-            if existingCount > 0 {
-                c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
-                return
-            }
+			// Check if email already exists for other users
+			var existingCount int
+			checkQuery := "SELECT COUNT(*) FROM users WHERE email = $1 AND id != $2"
+			err := db.QueryRow(checkQuery, updateData.Email, userID).Scan(&existingCount)
+			if err != nil {
+				log.Printf("Error checking email: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+				return
+			}
+			if existingCount > 0 {
+				c.JSON(http.StatusConflict, gin.H{"error": "Email already exists"})
+				return
+			}
 
-            // Build update query based on whether password is being changed
-            var query string
-            var args []interface{}
+			// Build update query based on whether password is being changed
+			var query string
+			var args []interface{}
 
-            if updateData.Password != "" {
-                query = `
+			if updateData.Password != "" {
+				query = `
                     UPDATE users 
                     SET name = $1, email = $2, role = $3, password = $4, updated_at = NOW()
                     WHERE id = $5
                 `
-                args = []interface{}{updateData.Name, updateData.Email, updateData.Role, updateData.Password, userID}
-            } else {
-                query = `
+				args = []interface{}{updateData.Name, updateData.Email, updateData.Role, updateData.Password, userID}
+			} else {
+				query = `
                     UPDATE users 
                     SET name = $1, email = $2, role = $3, updated_at = NOW()
                     WHERE id = $4
                 `
-                args = []interface{}{updateData.Name, updateData.Email, updateData.Role, userID}
-            }
+				args = []interface{}{updateData.Name, updateData.Email, updateData.Role, userID}
+			}
 
-            result, err := db.Exec(query, args...)
-            if err != nil {
-                log.Printf("Error updating user: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
-                return
-            }
+			result, err := db.Exec(query, args...)
+			if err != nil {
+				log.Printf("Error updating user: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+				return
+			}
 
-            rowsAffected, err := result.RowsAffected()
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify update"})
-                return
-            }
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify update"})
+				return
+			}
 
-            if rowsAffected == 0 {
-                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-                return
-            }
+			if rowsAffected == 0 {
+				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+				return
+			}
 
-            c.JSON(http.StatusOK, gin.H{
-                "message": "User updated successfully",
-                "id": userID,
-            })
-        })
+			c.JSON(http.StatusOK, gin.H{
+				"message": "User updated successfully",
+				"id":      userID,
+			})
+		})
 
-        // DELETE user by ID (hard delete)
-        api.DELETE("/users/:id", func(c *gin.Context) {
-            userID := c.Param("id")
+		// DELETE user by ID (hard delete)
+		api.DELETE("/users/:id", func(c *gin.Context) {
+			userID := c.Param("id")
 
-            // Hard delete from database
-            query := `DELETE FROM users WHERE id = $1`
+			// Hard delete from database
+			query := `DELETE FROM users WHERE id = $1`
 
-            result, err := db.Exec(query, userID)
-            if err != nil {
-                log.Printf("Error deleting user: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
-                return
-            }
+			result, err := db.Exec(query, userID)
+			if err != nil {
+				log.Printf("Error deleting user: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+				return
+			}
 
-            rowsAffected, err := result.RowsAffected()
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify deletion"})
-                return
-            }
+			rowsAffected, err := result.RowsAffected()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify deletion"})
+				return
+			}
 
-            if rowsAffected == 0 {
-                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-                return
-            }
+			if rowsAffected == 0 {
+				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+				return
+			}
 
-            c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
-        })
+			c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+		})
 
-        api.POST("/login", func(c *gin.Context) {
-            log.Printf("Login request from origin: %s", c.GetHeader("Origin"))
-            log.Printf("Login request method: %s", c.Request.Method)
-            
-            var loginReq struct {
-                Email    string `json:"email"`
-                Password string `json:"password"`
-            }
+		api.POST("/login", func(c *gin.Context) {
+			log.Printf("Login request from origin: %s", c.GetHeader("Origin"))
+			log.Printf("Login request method: %s", c.Request.Method)
 
-            if err := c.BindJSON(&loginReq); err != nil {
-                log.Printf("Login bind error: %v", err)
-                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-                return
-            }
-            
-            log.Printf("Login attempt for email: %s", loginReq.Email)
+			var loginReq struct {
+				Email    string `json:"email"`
+				Password string `json:"password"`
+			}
 
-            // Get user from database
-            var user struct {
-                ID       int    `json:"id"`
-                Name     string `json:"name"`
-                Email    string `json:"email"`
-                Password string `json:"password"`
-                Role     string `json:"role"`
-            }
+			if err := c.BindJSON(&loginReq); err != nil {
+				log.Printf("Login bind error: %v", err)
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 
-            query := "SELECT id, name, email, password, role FROM users WHERE email = $1"
-            err := db.QueryRow(query, loginReq.Email).Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Role)
-            if err != nil {
-                if err == sql.ErrNoRows {
-                    c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-                    return
-                }
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-                return
-            }
+			log.Printf("Login attempt for email: %s", loginReq.Email)
 
-            // Compare password (direct comparison, no hashing)
-            if user.Password != loginReq.Password {
-                c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-                return
-            }
+			// Get user from database
+			var user struct {
+				ID       int    `json:"id"`
+				Name     string `json:"name"`
+				Email    string `json:"email"`
+				Password string `json:"password"`
+				Role     string `json:"role"`
+			}
 
-            // Generate JWT token
-            token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-                "user_id": user.ID,
-                "email":   user.Email,
-                "role":    user.Role,
-                "exp":     time.Now().Add(time.Hour * 24).Unix(),
-            })
+			query := "SELECT id, name, email, password, role FROM users WHERE email = $1"
+			err := db.QueryRow(query, loginReq.Email).Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Role)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+					return
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+				return
+			}
 
-            tokenString, err := token.SignedString([]byte("your-secret-key"))
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
-                return
-            }
+			// Compare password (direct comparison, no hashing)
+			if user.Password != loginReq.Password {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+				return
+			}
 
-            // Return user data (without password)
-            c.JSON(http.StatusOK, gin.H{
-                "token": tokenString,
-                "user": gin.H{
-                    "id":   user.ID,
-                    "name": user.Name,
-                    "email": user.Email,
-                    "role": user.Role,
-                },
-                "message": "Login successful",
-            })
-        })
+			// Generate JWT token
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+				"user_id": user.ID,
+				"email":   user.Email,
+				"role":    user.Role,
+				"exp":     time.Now().Add(time.Hour * 24).Unix(),
+			})
 
-        // Course endpoints
-        api.POST("/courses", func(c *gin.Context) {
-            var req struct {
-                Title       string `json:"title"`
-                Description string `json:"description"`
-                Category    string `json:"category"`
-                Duration    int    `json:"duration"`
-                VideoURL    string `json:"video_url"`
-                Quiz        struct {
-                    Questions []struct {
-                        ID            int      `json:"id"`
-                        Question      string   `json:"question"`
-                        Options       []string `json:"options"`
-                        CorrectAnswer int      `json:"correctAnswer"`
-                    } `json:"questions"`
-                } `json:"quiz"`
-                WrittenExam struct {
-                    Questions []struct {
-                        ID       string `json:"id"`
-                        Question string `json:"question"`
-                    } `json:"questions"`
-                } `json:"writtenExam"`
-            }
+			tokenString, err := token.SignedString([]byte("your-secret-key"))
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generating token"})
+				return
+			}
 
-            if err := c.BindJSON(&req); err != nil {
-                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-                return
-            }
+			// Return user data (without password)
+			c.JSON(http.StatusOK, gin.H{
+				"token": tokenString,
+				"user": gin.H{
+					"id":    user.ID,
+					"name":  user.Name,
+					"email": user.Email,
+					"role":  user.Role,
+				},
+				"message": "Login successful",
+			})
+		})
 
-            // Validate required fields
-            if req.Title == "" {
-                c.JSON(http.StatusBadRequest, gin.H{"error": "Title is required"})
-                return
-            }
+		// Course endpoints
+		api.POST("/courses", func(c *gin.Context) {
+			var req struct {
+				Title         string `json:"title"`
+				Description   string `json:"description"`
+				Category      string `json:"category"`
+				Duration      int    `json:"duration"`
+				VideoURL      string `json:"video_url"`
+				Visibility    string `json:"visibility"`    // 'all' or 'specific'
+				SelectedUsers []int  `json:"selectedUsers"` // Array of user IDs
+				Quiz          struct {
+					Questions []struct {
+						ID            int      `json:"id"`
+						Question      string   `json:"question"`
+						Options       []string `json:"options"`
+						CorrectAnswer int      `json:"correctAnswer"`
+					} `json:"questions"`
+				} `json:"quiz"`
+				WrittenExam struct {
+					Questions []struct {
+						ID       string `json:"id"`
+						Question string `json:"question"`
+					} `json:"questions"`
+				} `json:"writtenExam"`
+			}
 
-            // For now, set created_by to 1 (first user)
-            // In production, get this from JWT token
-            createdBy := 1
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 
-            // Begin transaction
-            tx, err := db.Begin()
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
-                return
-            }
-            defer tx.Rollback()
+			// Validate required fields
+			if req.Title == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Title is required"})
+				return
+			}
 
-            // Create course
-            query := `
-                INSERT INTO courses (title, description, category, duration, video_url, created_by, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, NOW())
+			// Default visibility to 'all' if not specified
+			if req.Visibility == "" {
+				req.Visibility = "all"
+			}
+
+			// For now, set created_by to 1 (first user)
+			// In production, get this from JWT token
+			createdBy := 1
+
+			// Begin transaction
+			tx, err := db.Begin()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+				return
+			}
+			defer tx.Rollback()
+
+			// Create course with visibility
+			query := `
+                INSERT INTO courses (title, description, category, duration, video_url, visibility, created_by, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
                 RETURNING id, created_at`
 
-            var courseID int
-            var createdAt time.Time
-            err = tx.QueryRow(query, req.Title, req.Description, req.Category, 
-                req.Duration, req.VideoURL, createdBy).Scan(&courseID, &createdAt)
-            if err != nil {
-                log.Printf("Failed to create course: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
-                return
-            }
+			var courseID int
+			var createdAt time.Time
+			err = tx.QueryRow(query, req.Title, req.Description, req.Category,
+				req.Duration, req.VideoURL, req.Visibility, createdBy).Scan(&courseID, &createdAt)
+			if err != nil {
+				log.Printf("Failed to create course: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
+				return
+			}
 
-            // Create multiple choice exam if quiz questions exist
-            if len(req.Quiz.Questions) > 0 {
-                examQuery := `
+			// If visibility is 'specific', add course_access entries
+			if req.Visibility == "specific" && len(req.SelectedUsers) > 0 {
+				accessQuery := `INSERT INTO course_access (course_id, user_id, granted_by, created_at) VALUES ($1, $2, $3, NOW())`
+				for _, userID := range req.SelectedUsers {
+					_, err = tx.Exec(accessQuery, courseID, userID, createdBy)
+					if err != nil {
+						log.Printf("Failed to create course access for user %d: %v", userID, err)
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set course access"})
+						return
+					}
+				}
+			}
+
+			// Create multiple choice exam if quiz questions exist
+			if len(req.Quiz.Questions) > 0 {
+				examQuery := `
                     INSERT INTO exams (course_id, title, type, description, created_at, updated_at)
                     VALUES ($1, $2, $3, $4, NOW(), NOW())
                     RETURNING id`
 
-                var mcExamID int
-                err = tx.QueryRow(examQuery, courseID, "แบบทดสอบปรนัย", "multiple_choice", "แบบทดสอบปรนัยสำหรับหลักสูตรนี้").Scan(&mcExamID)
-                if err != nil {
-                    log.Printf("Failed to create multiple choice exam: %v", err)
-                    c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create multiple choice exam"})
-                    return
-                }
+				var mcExamID int
+				err = tx.QueryRow(examQuery, courseID, "แบบทดสอบปรนัย", "multiple_choice", "แบบทดสอบปรนัยสำหรับหลักสูตรนี้").Scan(&mcExamID)
+				if err != nil {
+					log.Printf("Failed to create multiple choice exam: %v", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create multiple choice exam"})
+					return
+				}
 
-                // Create quiz questions
-                for _, q := range req.Quiz.Questions {
-                    if q.Question != "" { // Only create non-empty questions
-                        optionsJSON, _ := json.Marshal(q.Options)
-                        questionQuery := `
+				// Create quiz questions
+				for _, q := range req.Quiz.Questions {
+					if q.Question != "" { // Only create non-empty questions
+						optionsJSON, _ := json.Marshal(q.Options)
+						questionQuery := `
                             INSERT INTO questions (exam_id, question_text, question_type, options, correct_answer, created_at, updated_at, points)
                             VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), 1)`
 
-                        _, err = tx.Exec(questionQuery, mcExamID, q.Question, "multiple_choice", string(optionsJSON), q.CorrectAnswer)
-                        if err != nil {
-                            log.Printf("Failed to create quiz question: %v", err)
-                            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create quiz question"})
-                            return
-                        }
-                    }
-                }
-            }
+						_, err = tx.Exec(questionQuery, mcExamID, q.Question, "multiple_choice", string(optionsJSON), q.CorrectAnswer)
+						if err != nil {
+							log.Printf("Failed to create quiz question: %v", err)
+							c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create quiz question"})
+							return
+						}
+					}
+				}
+			}
 
-            // Create written exam if written questions exist
-            if len(req.WrittenExam.Questions) > 0 {
-                examQuery := `
+			// Create written exam if written questions exist
+			if len(req.WrittenExam.Questions) > 0 {
+				examQuery := `
                     INSERT INTO exams (course_id, title, type, description, created_at, updated_at)
                     VALUES ($1, $2, $3, $4, NOW(), NOW())
                     RETURNING id`
 
-                var writtenExamID int
-                err = tx.QueryRow(examQuery, courseID, "แบบทดสอบเขียน", "written", "แบบทดสอบเขียนสำหรับหลักสูตรนี้").Scan(&writtenExamID)
-                if err != nil {
-                    log.Printf("Failed to create written exam: %v", err)
-                    c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create written exam"})
-                    return
-                }
+				var writtenExamID int
+				err = tx.QueryRow(examQuery, courseID, "แบบทดสอบเขียน", "written", "แบบทดสอบเขียนสำหรับหลักสูตรนี้").Scan(&writtenExamID)
+				if err != nil {
+					log.Printf("Failed to create written exam: %v", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create written exam"})
+					return
+				}
 
-                // Create written questions
-                for _, q := range req.WrittenExam.Questions {
-                    if q.Question != "" { // Only create non-empty questions
-                        questionQuery := `
+				// Create written questions
+				for _, q := range req.WrittenExam.Questions {
+					if q.Question != "" { // Only create non-empty questions
+						questionQuery := `
                             INSERT INTO questions (exam_id, question_text, question_type, created_at, updated_at, points)
                             VALUES ($1, $2, $3, NOW(), NOW(), 1)`
 
-                        _, err = tx.Exec(questionQuery, writtenExamID, q.Question, "written")
-                        if err != nil {
-                            log.Printf("Failed to create written question: %v", err)
-                            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create written question"})
-                            return
-                        }
-                    }
-                }
-            }
+						_, err = tx.Exec(questionQuery, writtenExamID, q.Question, "written")
+						if err != nil {
+							log.Printf("Failed to create written question: %v", err)
+							c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create written question"})
+							return
+						}
+					}
+				}
+			}
 
-            // Commit transaction
-            err = tx.Commit()
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
-                return
-            }
+			// Commit transaction
+			err = tx.Commit()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+				return
+			}
 
-            c.JSON(http.StatusCreated, gin.H{
-                "id":          courseID,
-                "title":       req.Title,
-                "description": req.Description,
-                "category":    req.Category,
-                "duration":    req.Duration,
-                "video_url":   req.VideoURL,
-                "created_by":  createdBy,
-                "created_at":  createdAt,
-                "message":     "Course created successfully",
-            })
-        })
+			c.JSON(http.StatusCreated, gin.H{
+				"id":          courseID,
+				"title":       req.Title,
+				"description": req.Description,
+				"category":    req.Category,
+				"duration":    req.Duration,
+				"video_url":   req.VideoURL,
+				"created_by":  createdBy,
+				"created_at":  createdAt,
+				"message":     "Course created successfully",
+			})
+		})
 
-        api.GET("/courses", func(c *gin.Context) {
-            query := `
-                SELECT c.id, c.title, c.description, c.category, c.duration, c.video_url, 
-                       c.created_by, c.created_at, u.name as creator_name
-                FROM courses c
-                LEFT JOIN users u ON c.created_by = u.id
-                ORDER BY c.created_at DESC`
+		api.GET("/courses", func(c *gin.Context) {
+			// Get user_id from query parameter (optional, for filtering by access)
+			userIDStr := c.Query("user_id")
 
-            rows, err := db.Query(query)
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch courses"})
-                return
-            }
-            defer rows.Close()
+			var query string
+			var args []interface{}
 
-            var courses []gin.H
-            for rows.Next() {
-                var course struct {
-                    ID          int       `json:"id"`
-                    Title       string    `json:"title"`
-                    Description string    `json:"description"`
-                    Category    string    `json:"category"`
-                    Duration    int       `json:"duration"`
-                    VideoURL    string    `json:"video_url"`
-                    CreatedBy   int       `json:"created_by"`
-                    CreatedAt   time.Time `json:"created_at"`
-                    CreatorName string    `json:"creator_name"`
-                }
+			if userIDStr != "" {
+				// If user_id is provided, filter courses based on visibility (exclude hidden courses)
+				query = `
+					SELECT DISTINCT c.id, c.title, c.description, c.category, c.duration, c.video_url, 
+						   c.visibility, c.created_by, c.created_at, u.name as creator_name
+					FROM courses c
+					LEFT JOIN users u ON c.created_by = u.id
+					LEFT JOIN course_access ca ON c.id = ca.course_id
+					WHERE (c.visibility = 'all' 
+					   OR (c.visibility = 'specific' AND ca.user_id = $1))
+					   AND c.visibility != 'hidden'
+					ORDER BY c.created_at DESC`
+				args = append(args, userIDStr)
+			} else {
+				// If no user_id, return all courses (for HR)
+				query = `
+					SELECT c.id, c.title, c.description, c.category, c.duration, c.video_url, 
+						   c.visibility, c.created_by, c.created_at, u.name as creator_name
+					FROM courses c
+					LEFT JOIN users u ON c.created_by = u.id
+					ORDER BY c.created_at DESC`
+			}
 
-                err := rows.Scan(&course.ID, &course.Title, &course.Description, &course.Category,
-                    &course.Duration, &course.VideoURL, &course.CreatedBy, &course.CreatedAt, &course.CreatorName)
-                if err != nil {
-                    c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan course"})
-                    return
-                }
+			var rows *sql.Rows
+			var err error
 
-                courses = append(courses, gin.H{
-                    "id":           course.ID,
-                    "title":        course.Title,
-                    "description":  course.Description,
-                    "category":     course.Category,
-                    "duration":     course.Duration,
-                    "video_url":    course.VideoURL,
-                    "created_by":   course.CreatedBy,
-                    "created_at":   course.CreatedAt,
-                    "creator_name": course.CreatorName,
-                })
-            }
+			if len(args) > 0 {
+				rows, err = db.Query(query, args...)
+			} else {
+				rows, err = db.Query(query)
+			}
 
-            c.JSON(http.StatusOK, gin.H{
-                "courses": courses,
-            })
-        })
+			if err != nil {
+				log.Printf("Failed to fetch courses: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch courses"})
+				return
+			}
+			defer rows.Close()
 
-        api.GET("/courses/:id", func(c *gin.Context) {
-            id := c.Param("id")
-            
-            query := `
+			var courses []gin.H
+			for rows.Next() {
+				var course struct {
+					ID          int       `json:"id"`
+					Title       string    `json:"title"`
+					Description string    `json:"description"`
+					Category    string    `json:"category"`
+					Duration    int       `json:"duration"`
+					VideoURL    string    `json:"video_url"`
+					Visibility  string    `json:"visibility"`
+					CreatedBy   int       `json:"created_by"`
+					CreatedAt   time.Time `json:"created_at"`
+					CreatorName string    `json:"creator_name"`
+				}
+
+				err := rows.Scan(&course.ID, &course.Title, &course.Description, &course.Category,
+					&course.Duration, &course.VideoURL, &course.Visibility, &course.CreatedBy, &course.CreatedAt, &course.CreatorName)
+				if err != nil {
+					log.Printf("Failed to scan course: %v", err)
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan course"})
+					return
+				}
+
+				courses = append(courses, gin.H{
+					"id":           course.ID,
+					"title":        course.Title,
+					"description":  course.Description,
+					"category":     course.Category,
+					"duration":     course.Duration,
+					"video_url":    course.VideoURL,
+					"visibility":   course.Visibility,
+					"created_by":   course.CreatedBy,
+					"created_at":   course.CreatedAt,
+					"creator_name": course.CreatorName,
+				})
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"courses": courses,
+			})
+		})
+
+		api.GET("/courses/:id", func(c *gin.Context) {
+			id := c.Param("id")
+
+			query := `
                 SELECT c.id, c.title, c.description, c.category, c.duration, c.video_url, 
                        c.created_by, c.created_at, u.name as creator_name
                 FROM courses c
                 LEFT JOIN users u ON c.created_by = u.id
                 WHERE c.id = $1`
 
-            var course struct {
-                ID          int       `json:"id"`
-                Title       string    `json:"title"`
-                Description string    `json:"description"`
-                Category    string    `json:"category"`
-                Duration    int       `json:"duration"`
-                VideoURL    string    `json:"video_url"`
-                CreatedBy   int       `json:"created_by"`
-                CreatedAt   time.Time `json:"created_at"`
-                CreatorName string    `json:"creator_name"`
-            }
+			var course struct {
+				ID          int       `json:"id"`
+				Title       string    `json:"title"`
+				Description string    `json:"description"`
+				Category    string    `json:"category"`
+				Duration    int       `json:"duration"`
+				VideoURL    string    `json:"video_url"`
+				CreatedBy   int       `json:"created_by"`
+				CreatedAt   time.Time `json:"created_at"`
+				CreatorName string    `json:"creator_name"`
+			}
 
-            err := db.QueryRow(query, id).Scan(&course.ID, &course.Title, &course.Description, 
-                &course.Category, &course.Duration, &course.VideoURL, &course.CreatedBy, 
-                &course.CreatedAt, &course.CreatorName)
-            if err != nil {
-                if err == sql.ErrNoRows {
-                    c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
-                    return
-                }
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch course"})
-                return
-            }
+			err := db.QueryRow(query, id).Scan(&course.ID, &course.Title, &course.Description,
+				&course.Category, &course.Duration, &course.VideoURL, &course.CreatedBy,
+				&course.CreatedAt, &course.CreatorName)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+					return
+				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch course"})
+				return
+			}
 
-            c.JSON(http.StatusOK, gin.H{
-                "course": gin.H{
-                    "id":           course.ID,
-                    "title":        course.Title,
-                    "description":  course.Description,
-                    "category":     course.Category,
-                    "duration":     course.Duration,
-                    "video_url":    course.VideoURL,
-                    "created_by":   course.CreatedBy,
-                    "created_at":   course.CreatedAt,
-                    "creator_name": course.CreatorName,
-                },
-            })
-        })
+			c.JSON(http.StatusOK, gin.H{
+				"course": gin.H{
+					"id":           course.ID,
+					"title":        course.Title,
+					"description":  course.Description,
+					"category":     course.Category,
+					"duration":     course.Duration,
+					"video_url":    course.VideoURL,
+					"created_by":   course.CreatedBy,
+					"created_at":   course.CreatedAt,
+					"creator_name": course.CreatorName,
+				},
+			})
+		})
 
-        // Update course endpoint
-        api.PUT("/courses/:id", func(c *gin.Context) {
-            id := c.Param("id")
-            
-            var req struct {
-                Title       string `json:"title"`
-                Description string `json:"description"`
-                Category    string `json:"category"`
-                Duration    int    `json:"duration"`
-                VideoURL    string `json:"video_url"`
-            }
+		// Get course access (users who can access a specific course)
+		api.GET("/courses/:id/access", func(c *gin.Context) {
+			courseID := c.Param("id")
 
-            if err := c.BindJSON(&req); err != nil {
-                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-                return
-            }
+			query := `
+				SELECT ca.user_id, u.name, u.email
+				FROM course_access ca
+				JOIN users u ON ca.user_id = u.id
+				WHERE ca.course_id = $1
+				ORDER BY u.name`
 
-            // Validate required fields
-            if req.Title == "" {
-                c.JSON(http.StatusBadRequest, gin.H{"error": "Title is required"})
-                return
-            }
+			rows, err := db.Query(query, courseID)
+			if err != nil {
+				log.Printf("Failed to fetch course access: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch course access"})
+				return
+			}
+			defer rows.Close()
 
-            query := `
+			var users []int
+			for rows.Next() {
+				var userID int
+				var name, email string
+				if err := rows.Scan(&userID, &name, &email); err != nil {
+					log.Printf("Failed to scan course access: %v", err)
+					continue
+				}
+				users = append(users, userID)
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"users": users,
+			})
+		})
+
+		// Update course endpoint
+		api.PUT("/courses/:id", func(c *gin.Context) {
+			id := c.Param("id")
+
+			var req struct {
+				Title         string `json:"title"`
+				Description   string `json:"description"`
+				Category      string `json:"category"`
+				Duration      int    `json:"duration"`
+				VideoURL      string `json:"video_url"`
+				Visibility    string `json:"visibility"`
+				SelectedUsers []int  `json:"selectedUsers"`
+			}
+
+			if err := c.BindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			// Validate required fields
+			if req.Title == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Title is required"})
+				return
+			}
+
+			// Default visibility to 'all' if not specified
+			if req.Visibility == "" {
+				req.Visibility = "all"
+			}
+
+			// Begin transaction
+			tx, err := db.Begin()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+				return
+			}
+			defer tx.Rollback()
+
+			// Update course
+			query := `
                 UPDATE courses 
-                SET title = $1, description = $2, category = $3, duration = $4, video_url = $5, updated_at = NOW()
-                WHERE id = $6`
+                SET title = $1, description = $2, category = $3, duration = $4, video_url = $5, visibility = $6, updated_at = NOW()
+                WHERE id = $7`
 
-            result, err := db.Exec(query, req.Title, req.Description, req.Category, req.Duration, req.VideoURL, id)
-            if err != nil {
-                log.Printf("Failed to update course: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update course"})
-                return
-            }
+			result, err := tx.Exec(query, req.Title, req.Description, req.Category, req.Duration, req.VideoURL, req.Visibility, id)
+			if err != nil {
+				log.Printf("Failed to update course: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update course"})
+				return
+			}
 
-            rowsAffected, err := result.RowsAffected()
-            if err != nil || rowsAffected == 0 {
-                c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
-                return
-            }
+			rowsAffected, err := result.RowsAffected()
+			if err != nil || rowsAffected == 0 {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+				return
+			}
 
-            c.JSON(http.StatusOK, gin.H{
-                "message": "Course updated successfully",
-            })
-        })
+			// Update course access if visibility is 'specific'
+			// First, delete existing access entries
+			_, err = tx.Exec(`DELETE FROM course_access WHERE course_id = $1`, id)
+			if err != nil {
+				log.Printf("Failed to delete old course access: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update course access"})
+				return
+			}
 
-        // Delete course endpoint
-        api.DELETE("/courses/:id", func(c *gin.Context) {
-            id := c.Param("id")
-            
-            // Begin transaction
-            tx, err := db.Begin()
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
-                return
-            }
-            defer tx.Rollback()
+			// Then, insert new access entries if visibility is 'specific'
+			if req.Visibility == "specific" && len(req.SelectedUsers) > 0 {
+				createdBy := 1 // TODO: Get from JWT token
+				accessQuery := `INSERT INTO course_access (course_id, user_id, granted_by, created_at) VALUES ($1, $2, $3, NOW())`
+				for _, userID := range req.SelectedUsers {
+					_, err = tx.Exec(accessQuery, id, userID, createdBy)
+					if err != nil {
+						log.Printf("Failed to create course access for user %d: %v", userID, err)
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set course access"})
+						return
+					}
+				}
+			}
 
-            // Delete exam_results first (foreign key constraint)
-            _, err = tx.Exec(`
+			// Commit transaction
+			if err = tx.Commit(); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+				return
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Course updated successfully",
+			})
+		})
+
+		// Delete course endpoint
+		api.DELETE("/courses/:id", func(c *gin.Context) {
+			id := c.Param("id")
+
+			// Begin transaction
+			tx, err := db.Begin()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to begin transaction"})
+				return
+			}
+			defer tx.Rollback()
+
+			// Delete exam_results first (foreign key constraint)
+			_, err = tx.Exec(`
                 DELETE FROM exam_results 
                 WHERE exam_id IN (SELECT id FROM exams WHERE course_id = $1)
             `, id)
-            if err != nil {
-                log.Printf("Failed to delete exam results: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course exam results"})
-                return
-            }
+			if err != nil {
+				log.Printf("Failed to delete exam results: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course exam results"})
+				return
+			}
 
-            // Delete course_progress
-            _, err = tx.Exec(`DELETE FROM course_progress WHERE course_id = $1`, id)
-            if err != nil {
-                log.Printf("Failed to delete course progress: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course progress"})
-                return
-            }
+			// Delete course_progress
+			_, err = tx.Exec(`DELETE FROM course_progress WHERE course_id = $1`, id)
+			if err != nil {
+				log.Printf("Failed to delete course progress: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course progress"})
+				return
+			}
 
-            // Delete questions (foreign key constraint)
-            _, err = tx.Exec(`
+			// Delete questions (foreign key constraint)
+			_, err = tx.Exec(`
                 DELETE FROM questions 
                 WHERE exam_id IN (SELECT id FROM exams WHERE course_id = $1)
             `, id)
-            if err != nil {
-                log.Printf("Failed to delete questions: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course questions"})
-                return
-            }
+			if err != nil {
+				log.Printf("Failed to delete questions: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course questions"})
+				return
+			}
 
-            // Delete exams
-            _, err = tx.Exec(`DELETE FROM exams WHERE course_id = $1`, id)
-            if err != nil {
-                log.Printf("Failed to delete exams: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course exams"})
-                return
-            }
+			// Delete exams
+			_, err = tx.Exec(`DELETE FROM exams WHERE course_id = $1`, id)
+			if err != nil {
+				log.Printf("Failed to delete exams: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course exams"})
+				return
+			}
 
-            // Delete course
-            result, err := tx.Exec(`DELETE FROM courses WHERE id = $1`, id)
-            if err != nil {
-                log.Printf("Failed to delete course: %v", err)
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course"})
-                return
-            }
+			// Delete course
+			result, err := tx.Exec(`DELETE FROM courses WHERE id = $1`, id)
+			if err != nil {
+				log.Printf("Failed to delete course: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete course"})
+				return
+			}
 
-            rowsAffected, err := result.RowsAffected()
-            if err != nil || rowsAffected == 0 {
-                c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
-                return
-            }
+			rowsAffected, err := result.RowsAffected()
+			if err != nil || rowsAffected == 0 {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+				return
+			}
 
-            // Commit transaction
-            err = tx.Commit()
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
-                return
-            }
+			// Commit transaction
+			err = tx.Commit()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+				return
+			}
 
-            c.JSON(http.StatusOK, gin.H{
-                "message": "Course deleted successfully",
-            })
-        })
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Course deleted successfully",
+			})
+		})
 
-        // Exam endpoints
-        api.GET("/exams/course/:courseId", func(c *gin.Context) {
-            courseID := c.Param("courseId")
-            
-            // Query exams
-            examRows, err := db.Query(`
+		// Exam endpoints
+		api.GET("/exams/course/:courseId", func(c *gin.Context) {
+			courseID := c.Param("courseId")
+
+			// Query exams
+			examRows, err := db.Query(`
                 SELECT id, course_id, title, type, description, created_at 
                 FROM exams 
                 WHERE course_id = $1 AND deleted_at IS NULL
             `, courseID)
-            
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch exams"})
-                return
-            }
-            defer examRows.Close()
 
-            var exams []map[string]interface{}
-            
-            for examRows.Next() {
-                var exam struct {
-                    ID          int       `json:"id"`
-                    CourseID    int       `json:"course_id"`
-                    Title       string    `json:"title"`
-                    Type        string    `json:"type"`
-                    Description string    `json:"description"`
-                    CreatedAt   time.Time `json:"created_at"`
-                }
-                
-                err := examRows.Scan(&exam.ID, &exam.CourseID, &exam.Title, &exam.Type, &exam.Description, &exam.CreatedAt)
-                if err != nil {
-                    continue
-                }
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch exams"})
+				return
+			}
+			defer examRows.Close()
 
-                // Query questions for this exam
-                questionRows, err := db.Query(`
+			var exams []map[string]interface{}
+
+			for examRows.Next() {
+				var exam struct {
+					ID          int       `json:"id"`
+					CourseID    int       `json:"course_id"`
+					Title       string    `json:"title"`
+					Type        string    `json:"type"`
+					Description string    `json:"description"`
+					CreatedAt   time.Time `json:"created_at"`
+				}
+
+				err := examRows.Scan(&exam.ID, &exam.CourseID, &exam.Title, &exam.Type, &exam.Description, &exam.CreatedAt)
+				if err != nil {
+					continue
+				}
+
+				// Query questions for this exam
+				questionRows, err := db.Query(`
                     SELECT id, question_text, question_type, options, correct_answer, points
                     FROM questions 
                     WHERE exam_id = $1 AND deleted_at IS NULL
                 `, exam.ID)
-                
-                if err != nil {
-                    continue
-                }
 
-                var questions []map[string]interface{}
-                for questionRows.Next() {
-                    var question struct {
-                        ID            int            `json:"id"`
-                        QuestionText  string         `json:"question_text"`
-                        QuestionType  string         `json:"question_type"`
-                        Options       sql.NullString `json:"options"`
-                        CorrectAnswer sql.NullString `json:"correct_answer"`
-                        Points        int            `json:"points"`
-                    }
-                    
-                    err := questionRows.Scan(&question.ID, &question.QuestionText, &question.QuestionType, 
-                        &question.Options, &question.CorrectAnswer, &question.Points)
-                    if err != nil {
-                        continue
-                    }
-                    
-                    // Parse options JSON for multiple choice questions
-                    var parsedOptions []string
-                    if question.QuestionType == "multiple_choice" && question.Options.Valid && question.Options.String != "" {
-                        json.Unmarshal([]byte(question.Options.String), &parsedOptions)
-                    }
-                    
-                    // Handle correct answer
-                    var correctAnswer interface{}
-                    if question.CorrectAnswer.Valid {
-                        correctAnswer = question.CorrectAnswer.String
-                    }
-                    
-                    questions = append(questions, map[string]interface{}{
-                        "id":             question.ID,
-                        "question":       question.QuestionText,
-                        "options":        parsedOptions,
-                        "correctAnswer":  correctAnswer,
-                        "points":         question.Points,
-                    })
-                }
-                questionRows.Close()
+				if err != nil {
+					continue
+				}
 
-                examMap := map[string]interface{}{
-                    "id":          exam.ID,
-                    "course_id":   exam.CourseID,
-                    "title":       exam.Title,
-                    "type":        exam.Type,
-                    "description": exam.Description,
-                    "created_at":  exam.CreatedAt,
-                    "questions":   questions,
-                }
-                
-                exams = append(exams, examMap)
-            }
+				var questions []map[string]interface{}
+				for questionRows.Next() {
+					var question struct {
+						ID            int            `json:"id"`
+						QuestionText  string         `json:"question_text"`
+						QuestionType  string         `json:"question_type"`
+						Options       sql.NullString `json:"options"`
+						CorrectAnswer sql.NullString `json:"correct_answer"`
+						Points        int            `json:"points"`
+					}
 
-            c.JSON(http.StatusOK, gin.H{
-                "exams": exams,
-            })
-        })
+					err := questionRows.Scan(&question.ID, &question.QuestionText, &question.QuestionType,
+						&question.Options, &question.CorrectAnswer, &question.Points)
+					if err != nil {
+						continue
+					}
 
-        api.POST("/exam-results", func(c *gin.Context) {
-            var examResult struct {
-                UserID   int                    `json:"user_id"`
-                CourseID int                    `json:"course_id"`
-                ExamID   int                    `json:"exam_id"`
-                Answers  map[string]interface{} `json:"answers"`
-            }
+					// Parse options JSON for multiple choice questions
+					var parsedOptions []string
+					if question.QuestionType == "multiple_choice" && question.Options.Valid && question.Options.String != "" {
+						json.Unmarshal([]byte(question.Options.String), &parsedOptions)
+					}
 
-            if err := c.BindJSON(&examResult); err != nil {
-                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-                return
-            }
+					// Handle correct answer
+					var correctAnswer interface{}
+					if question.CorrectAnswer.Valid {
+						correctAnswer = question.CorrectAnswer.String
+					}
 
-            // Convert answers to JSON string
-            answersJSON, err := json.Marshal(examResult.Answers)
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process answers"})
-                return
-            }
+					questions = append(questions, map[string]interface{}{
+						"id":            question.ID,
+						"question":      question.QuestionText,
+						"options":       parsedOptions,
+						"correctAnswer": correctAnswer,
+						"points":        question.Points,
+					})
+				}
+				questionRows.Close()
 
-            // คำนวณคะแนน (ตอนนี้ให้ 0 ก่อน สามารถปรับปรุงการคำนวณได้)
-            score := 0.0
+				examMap := map[string]interface{}{
+					"id":          exam.ID,
+					"course_id":   exam.CourseID,
+					"title":       exam.Title,
+					"type":        exam.Type,
+					"description": exam.Description,
+					"created_at":  exam.CreatedAt,
+					"questions":   questions,
+				}
 
-            var resultID int
-            err = db.QueryRow(`
+				exams = append(exams, examMap)
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"exams": exams,
+			})
+		})
+
+		api.POST("/exam-results", func(c *gin.Context) {
+			var examResult struct {
+				UserID   int                    `json:"user_id"`
+				CourseID int                    `json:"course_id"`
+				ExamID   int                    `json:"exam_id"`
+				Answers  map[string]interface{} `json:"answers"`
+			}
+
+			if err := c.BindJSON(&examResult); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+
+			// Convert answers to JSON string
+			answersJSON, err := json.Marshal(examResult.Answers)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process answers"})
+				return
+			}
+
+			// คำนวณคะแนน (ตอนนี้ให้ 0 ก่อน สามารถปรับปรุงการคำนวณได้)
+			score := 0.0
+
+			var resultID int
+			err = db.QueryRow(`
                 INSERT INTO exam_results (user_id, course_id, exam_id, score, answers, created_at) 
                 VALUES ($1, $2, $3, $4, $5, NOW()) 
                 RETURNING id
             `, examResult.UserID, examResult.CourseID, examResult.ExamID, score, string(answersJSON)).Scan(&resultID)
 
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exam result"})
-                return
-            }
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exam result"})
+				return
+			}
 
-            c.JSON(http.StatusOK, gin.H{
-                "message": "Exam submitted successfully",
-                "result_id": resultID,
-                "score": score,
-            })
-        })
+			c.JSON(http.StatusOK, gin.H{
+				"message":   "Exam submitted successfully",
+				"result_id": resultID,
+				"score":     score,
+			})
+		})
 
-        // Dashboard endpoint - Get user dashboard data
-        api.GET("/dashboard/:userId", func(c *gin.Context) {
-            userID := c.Param("userId")
-            
-            // Get user info
-            var user struct {
-                ID   int    `json:"id"`
-                Name string `json:"name"`
-                Role string `json:"role"`
-            }
-            
-            err := db.QueryRow("SELECT id, name, role FROM users WHERE id = $1", userID).Scan(&user.ID, &user.Name, &user.Role)
-            if err != nil {
-                c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-                return
-            }
+		// Get written exam answers by course
+		api.GET("/written-exam-answers/:courseId", func(c *gin.Context) {
+			courseID := c.Param("courseId")
 
-            // Get course progress data
-            progressRows, err := db.Query(`
+			// Query to get written exam results with user info and questions
+			query := `
+				SELECT 
+					er.id,
+					er.user_id,
+					u.name as user_name,
+					er.exam_id,
+					e.title as exam_title,
+					er.answers,
+					er.score,
+					er.created_at
+				FROM exam_results er
+				JOIN users u ON er.user_id = u.id
+				JOIN exams e ON er.exam_id = e.id
+				WHERE er.course_id = $1 
+					AND e.type = 'written'
+					AND e.deleted_at IS NULL
+				ORDER BY er.created_at DESC
+			`
+
+			rows, err := db.Query(query, courseID)
+			if err != nil {
+				log.Printf("Error fetching written exam answers: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch answers"})
+				return
+			}
+			defer rows.Close()
+
+			var results []map[string]interface{}
+
+			for rows.Next() {
+				var result struct {
+					ID        int
+					UserID    int
+					UserName  string
+					ExamID    int
+					ExamTitle string
+					Answers   string
+					Score     float64
+					CreatedAt time.Time
+				}
+
+				err := rows.Scan(&result.ID, &result.UserID, &result.UserName, &result.ExamID,
+					&result.ExamTitle, &result.Answers, &result.Score, &result.CreatedAt)
+				if err != nil {
+					log.Printf("Error scanning row: %v", err)
+					continue
+				}
+
+				// Parse answers JSON
+				var answersMap map[string]interface{}
+				if err := json.Unmarshal([]byte(result.Answers), &answersMap); err != nil {
+					log.Printf("Error parsing answers JSON: %v", err)
+					continue
+				}
+
+				// Get questions for this exam
+				questionQuery := `
+					SELECT id, question_text, points
+					FROM questions
+					WHERE exam_id = $1 AND deleted_at IS NULL
+					ORDER BY id
+				`
+				questionRows, err := db.Query(questionQuery, result.ExamID)
+				if err != nil {
+					log.Printf("Error fetching questions: %v", err)
+					continue
+				}
+
+				var questionAnswers []map[string]interface{}
+				for questionRows.Next() {
+					var q struct {
+						ID           int
+						QuestionText string
+						Points       int
+					}
+					if err := questionRows.Scan(&q.ID, &q.QuestionText, &q.Points); err != nil {
+						continue
+					}
+
+					// Get answer for this question from answers map
+					questionIDStr := fmt.Sprintf("%d", q.ID)
+					answer := ""
+					if answerVal, ok := answersMap[questionIDStr]; ok {
+						if answerStr, ok := answerVal.(string); ok {
+							answer = answerStr
+						}
+					}
+
+					questionAnswers = append(questionAnswers, map[string]interface{}{
+						"question_id":   q.ID,
+						"question_text": q.QuestionText,
+						"answer":        answer,
+						"points":        q.Points,
+					})
+				}
+				questionRows.Close()
+
+				results = append(results, map[string]interface{}{
+					"id":               result.ID,
+					"user_id":          result.UserID,
+					"user_name":        result.UserName,
+					"exam_id":          result.ExamID,
+					"exam_title":       result.ExamTitle,
+					"question_answers": questionAnswers,
+					"score":            result.Score,
+					"submitted_at":     result.CreatedAt,
+				})
+			}
+
+			if results == nil {
+				results = []map[string]interface{}{}
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"answers": results,
+			})
+		})
+
+		// Dashboard endpoint - Get user dashboard data
+		api.GET("/dashboard/:userId", func(c *gin.Context) {
+			userID := c.Param("userId")
+
+			// Get user info
+			var user struct {
+				ID   int    `json:"id"`
+				Name string `json:"name"`
+				Role string `json:"role"`
+			}
+
+			err := db.QueryRow("SELECT id, name, role FROM users WHERE id = $1", userID).Scan(&user.ID, &user.Name, &user.Role)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+				return
+			}
+
+			// Get course progress data
+			progressRows, err := db.Query(`
                 SELECT c.id, c.title, c.category, c.duration, c.description,
                        COALESCE(cp.progress, 0) as progress,
                        cp.completed_at,
@@ -941,73 +1192,73 @@ func main() {
                 LEFT JOIN users u ON c.created_by = u.id
                 ORDER BY c.created_at DESC
             `, userID)
-            
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch progress data"})
-                return
-            }
-            defer progressRows.Close()
 
-            var courses []map[string]interface{}
-            totalCourses := 0
-            completedCourses := 0
-            inProgressCourses := 0
-            totalHours := 0.0
-            completedHours := 0.0
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch progress data"})
+				return
+			}
+			defer progressRows.Close()
 
-            for progressRows.Next() {
-                var course struct {
-                    ID          int            `json:"id"`
-                    Title       string         `json:"title"`
-                    Category    string         `json:"category"`
-                    Duration    int            `json:"duration"`
-                    Description string         `json:"description"`
-                    Progress    float64        `json:"progress"`
-                    CompletedAt sql.NullTime   `json:"completed_at"`
-                    CreatorName sql.NullString `json:"creator_name"`
-                }
+			var courses []map[string]interface{}
+			totalCourses := 0
+			completedCourses := 0
+			inProgressCourses := 0
+			totalHours := 0.0
+			completedHours := 0.0
 
-                err := progressRows.Scan(&course.ID, &course.Title, &course.Category, &course.Duration, 
-                    &course.Description, &course.Progress, &course.CompletedAt, &course.CreatorName)
-                if err != nil {
-                    continue
-                }
+			for progressRows.Next() {
+				var course struct {
+					ID          int            `json:"id"`
+					Title       string         `json:"title"`
+					Category    string         `json:"category"`
+					Duration    int            `json:"duration"`
+					Description string         `json:"description"`
+					Progress    float64        `json:"progress"`
+					CompletedAt sql.NullTime   `json:"completed_at"`
+					CreatorName sql.NullString `json:"creator_name"`
+				}
 
-                totalCourses++
-                hours := float64(course.Duration) / 60.0
-                totalHours += hours
-                completedHours += hours * (course.Progress / 100.0)
+				err := progressRows.Scan(&course.ID, &course.Title, &course.Category, &course.Duration,
+					&course.Description, &course.Progress, &course.CompletedAt, &course.CreatorName)
+				if err != nil {
+					continue
+				}
 
-                if course.Progress >= 100 {
-                    completedCourses++
-                } else if course.Progress > 0 {
-                    inProgressCourses++
-                }
+				totalCourses++
+				hours := float64(course.Duration) / 60.0
+				totalHours += hours
+				completedHours += hours * (course.Progress / 100.0)
 
-                var creatorName string
-                if course.CreatorName.Valid {
-                    creatorName = course.CreatorName.String
-                }
+				if course.Progress >= 100 {
+					completedCourses++
+				} else if course.Progress > 0 {
+					inProgressCourses++
+				}
 
-                var completedAt interface{}
-                if course.CompletedAt.Valid {
-                    completedAt = course.CompletedAt.Time
-                }
+				var creatorName string
+				if course.CreatorName.Valid {
+					creatorName = course.CreatorName.String
+				}
 
-                courses = append(courses, map[string]interface{}{
-                    "id":           course.ID,
-                    "title":        course.Title,
-                    "category":     course.Category,
-                    "duration":     course.Duration,
-                    "description":  course.Description,
-                    "progress":     course.Progress,
-                    "completed_at": completedAt,
-                    "creator_name": creatorName,
-                })
-            }
+				var completedAt interface{}
+				if course.CompletedAt.Valid {
+					completedAt = course.CompletedAt.Time
+				}
 
-            // Get recent exam results
-            examRows, err := db.Query(`
+				courses = append(courses, map[string]interface{}{
+					"id":           course.ID,
+					"title":        course.Title,
+					"category":     course.Category,
+					"duration":     course.Duration,
+					"description":  course.Description,
+					"progress":     course.Progress,
+					"completed_at": completedAt,
+					"creator_name": creatorName,
+				})
+			}
+
+			// Get recent exam results
+			examRows, err := db.Query(`
                 SELECT er.score, er.created_at, c.title as course_title, e.title as exam_title
                 FROM exam_results er
                 JOIN courses c ON er.course_id = c.id
@@ -1017,107 +1268,107 @@ func main() {
                 LIMIT 5
             `, userID)
 
-            var recentExams []map[string]interface{}
-            if err == nil {
-                defer examRows.Close()
-                for examRows.Next() {
-                    var exam struct {
-                        Score       float64   `json:"score"`
-                        CreatedAt   time.Time `json:"created_at"`
-                        CourseTitle string    `json:"course_title"`
-                        ExamTitle   string    `json:"exam_title"`
-                    }
+			var recentExams []map[string]interface{}
+			if err == nil {
+				defer examRows.Close()
+				for examRows.Next() {
+					var exam struct {
+						Score       float64   `json:"score"`
+						CreatedAt   time.Time `json:"created_at"`
+						CourseTitle string    `json:"course_title"`
+						ExamTitle   string    `json:"exam_title"`
+					}
 
-                    err := examRows.Scan(&exam.Score, &exam.CreatedAt, &exam.CourseTitle, &exam.ExamTitle)
-                    if err != nil {
-                        continue
-                    }
+					err := examRows.Scan(&exam.Score, &exam.CreatedAt, &exam.CourseTitle, &exam.ExamTitle)
+					if err != nil {
+						continue
+					}
 
-                    recentExams = append(recentExams, map[string]interface{}{
-                        "score":        exam.Score,
-                        "created_at":   exam.CreatedAt,
-                        "course_title": exam.CourseTitle,
-                        "exam_title":   exam.ExamTitle,
-                    })
-                }
-            }
+					recentExams = append(recentExams, map[string]interface{}{
+						"score":        exam.Score,
+						"created_at":   exam.CreatedAt,
+						"course_title": exam.CourseTitle,
+						"exam_title":   exam.ExamTitle,
+					})
+				}
+			}
 
-            // Generate weekly progress (mock data for now - could be enhanced with real tracking)
-            weeklyProgress := []map[string]interface{}{
-                {"day": "จ", "hours": 2.0},
-                {"day": "อ", "hours": 1.5},
-                {"day": "พ", "hours": 3.0},
-                {"day": "พฤ", "hours": 2.5},
-                {"day": "ศ", "hours": 1.0},
-                {"day": "ส", "hours": 0.0},
-                {"day": "อา", "hours": 2.0},
-            }
+			// Generate weekly progress (mock data for now - could be enhanced with real tracking)
+			weeklyProgress := []map[string]interface{}{
+				{"day": "จ", "hours": 2.0},
+				{"day": "อ", "hours": 1.5},
+				{"day": "พ", "hours": 3.0},
+				{"day": "พฤ", "hours": 2.5},
+				{"day": "ศ", "hours": 1.0},
+				{"day": "ส", "hours": 0.0},
+				{"day": "อา", "hours": 2.0},
+			}
 
-            // Calculate achievements
-            achievements := []map[string]interface{}{}
-            if completedCourses > 0 {
-                achievements = append(achievements, map[string]interface{}{
-                    "id":          1,
-                    "title":       "นักเรียนดีเด่น",
-                    "description": fmt.Sprintf("เรียนจบ %d คอร์สแล้ว", completedCourses),
-                    "icon":        "🏆",
-                    "type":        "completion",
-                })
-            }
-            if inProgressCourses >= 2 {
-                achievements = append(achievements, map[string]interface{}{
-                    "id":          2,
-                    "title":       "กำลังใจดี",
-                    "description": fmt.Sprintf("กำลังเรียน %d คอร์สพร้อมกัน", inProgressCourses),
-                    "icon":        "📚",
-                    "type":        "progress",
-                })
-            }
-            if completedHours >= 10 {
-                achievements = append(achievements, map[string]interface{}{
-                    "id":          3,
-                    "title":       "ผู้เรียนรู้",
-                    "description": fmt.Sprintf("เรียนไปแล้ว %.0f ชั่วโมง", completedHours),
-                    "icon":        "⏰",
-                    "type":        "hours",
-                })
-            }
+			// Calculate achievements
+			achievements := []map[string]interface{}{}
+			if completedCourses > 0 {
+				achievements = append(achievements, map[string]interface{}{
+					"id":          1,
+					"title":       "นักเรียนดีเด่น",
+					"description": fmt.Sprintf("เรียนจบ %d คอร์สแล้ว", completedCourses),
+					"icon":        "🏆",
+					"type":        "completion",
+				})
+			}
+			if inProgressCourses >= 2 {
+				achievements = append(achievements, map[string]interface{}{
+					"id":          2,
+					"title":       "กำลังใจดี",
+					"description": fmt.Sprintf("กำลังเรียน %d คอร์สพร้อมกัน", inProgressCourses),
+					"icon":        "📚",
+					"type":        "progress",
+				})
+			}
+			if completedHours >= 10 {
+				achievements = append(achievements, map[string]interface{}{
+					"id":          3,
+					"title":       "ผู้เรียนรู้",
+					"description": fmt.Sprintf("เรียนไปแล้ว %.0f ชั่วโมง", completedHours),
+					"icon":        "⏰",
+					"type":        "hours",
+				})
+			}
 
-            c.JSON(http.StatusOK, gin.H{
-                "user": map[string]interface{}{
-                    "id":   user.ID,
-                    "name": user.Name,
-                    "role": user.Role,
-                },
-                "stats": map[string]interface{}{
-                    "total_courses":     totalCourses,
-                    "completed_courses": completedCourses,
-                    "in_progress_courses": inProgressCourses,
-                    "total_hours":       int(totalHours),
-                    "completed_hours":   int(completedHours),
-                },
-                "courses":          courses,
-                "recent_exams":     recentExams,
-                "weekly_progress":  weeklyProgress,
-                "achievements":     achievements,
-            })
-        })
+			c.JSON(http.StatusOK, gin.H{
+				"user": map[string]interface{}{
+					"id":   user.ID,
+					"name": user.Name,
+					"role": user.Role,
+				},
+				"stats": map[string]interface{}{
+					"total_courses":       totalCourses,
+					"completed_courses":   completedCourses,
+					"in_progress_courses": inProgressCourses,
+					"total_hours":         int(totalHours),
+					"completed_hours":     int(completedHours),
+				},
+				"courses":         courses,
+				"recent_exams":    recentExams,
+				"weekly_progress": weeklyProgress,
+				"achievements":    achievements,
+			})
+		})
 
-        // Update course progress endpoint
-        api.POST("/course-progress", func(c *gin.Context) {
-            var progress struct {
-                UserID   int     `json:"user_id"`
-                CourseID int     `json:"course_id"`
-                Progress float64 `json:"progress"`
-            }
+		// Update course progress endpoint
+		api.POST("/course-progress", func(c *gin.Context) {
+			var progress struct {
+				UserID   int     `json:"user_id"`
+				CourseID int     `json:"course_id"`
+				Progress float64 `json:"progress"`
+			}
 
-            if err := c.BindJSON(&progress); err != nil {
-                c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-                return
-            }
+			if err := c.BindJSON(&progress); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
 
-            // Insert or update course progress
-            query := `
+			// Insert or update course progress
+			query := `
                 INSERT INTO course_progress (user_id, course_id, progress, updated_at, completed_at)
                 VALUES ($1, $2, $3, NOW(), CASE WHEN $3 >= 100 THEN NOW() ELSE NULL END)
                 ON CONFLICT (user_id, course_id)
@@ -1127,18 +1378,18 @@ func main() {
                     completed_at = CASE WHEN $3 >= 100 THEN NOW() ELSE course_progress.completed_at END
             `
 
-            _, err := db.Exec(query, progress.UserID, progress.CourseID, progress.Progress)
-            if err != nil {
-                c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update progress"})
-                return
-            }
+			_, err := db.Exec(query, progress.UserID, progress.CourseID, progress.Progress)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update progress"})
+				return
+			}
 
-            c.JSON(http.StatusOK, gin.H{
-                "message": "Progress updated successfully",
-            })
-        })
-    }
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Progress updated successfully",
+			})
+		})
+	}
 
-    port := getEnv("PORT", "8080")
-    r.Run(":" + port)
+	port := getEnv("PORT", "8080")
+	r.Run(":" + port)
 }

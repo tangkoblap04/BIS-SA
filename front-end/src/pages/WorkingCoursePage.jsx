@@ -1,43 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { COURSE_CATEGORIES, getCategoryLabel as getLabel } from '../constants/categories';
+import { COURSE_CATEGORIES } from '../constants/categories';
+import { authService } from '../services/auth.service';
+import { courseService } from '../services/course.service';
 
 function WorkingCoursePage() {
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [selectedCategories, setSelectedCategories] = useState([]);
-
-    // Mock data ในกรณีที่ API ไม่ทำงาน
-    const mockCourses = [
-        {
-            id: 1,
-            title: 'การบริการลูกค้าเบื้องต้น',
-            description: 'หลักสูตรพื้นฐานสำหรับการให้บริการลูกค้า รวมถึงการสื่อสาร การแก้ไขปัญหา และการสร้างความพึงพอใจ',
-            category: 'customer-service',
-            duration: 120,
-            creator_name: 'HR Admin',
-            created_at: '2024-01-15'
-        },
-        {
-            id: 2,
-            title: 'การจัดการข้อร้องเรียน',
-            description: 'เทคนิคการรับมือกับข้อร้องเรียนของลูกค้าอย่างมืออาชีพ และการแก้ไขปัญหาอย่างมีประสิทธิภาพ',
-            category: 'customer-service',
-            duration: 90,
-            creator_name: 'HR Admin',
-            created_at: '2024-01-20'
-        },
-        {
-            id: 3,
-            title: 'การจัดการร้านอาหาร',
-            description: 'หลักการบริหารจัดการร้านอาหารแบบครบวงจร ตั้งแต่การจัดการสต็อก การคิดต้นทุน และการบริหารทีม',
-            category: 'management',
-            duration: 180,
-            creator_name: 'HR Admin',
-            created_at: '2024-01-25'
-        }
-    ];
 
     useEffect(() => {
         fetchCourses();
@@ -48,19 +19,16 @@ function WorkingCoursePage() {
             setLoading(true);
             setError('');
 
-            // ลองเรียก API ก่อน
-            const response = await fetch('http://localhost:8080/api/courses');
-            if (response.ok) {
-                const data = await response.json();
-                const coursesData = data.courses || data || [];
-                setCourses(coursesData.length > 0 ? coursesData : mockCourses);
-            } else {
-                // ถ้า API ไม่ทำงาน ใช้ mock data
-                setCourses(mockCourses);
-            }
+            // Get current user
+            const user = authService.getCurrentUser();
+
+            // Fetch courses with user_id for access filtering
+            const response = await courseService.getAllCourses(user?.id);
+            const coursesData = response.courses || response || [];
+            setCourses(coursesData);
         } catch (error) {
-            console.log('API not available, using mock data');
-            setCourses(mockCourses);
+            console.error('Error fetching courses:', error);
+            setError('ไม่สามารถโหลดคอร์สได้');
         } finally {
             setLoading(false);
         }

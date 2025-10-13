@@ -1,4 +1,4 @@
-2025/10/12 17:08:51 Successfully connected to database
+2025/10/13 04:18:16 Successfully connected to database
 [GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
 
 [GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
@@ -25,13 +25,42 @@
 [GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
 Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.
 [GIN-debug] Listening and serving HTTP on :8080
-[GIN] 2025/10/12 - 17:08:56 | 200 |      81.923µs |             ::1 | GET      "/api/health"
-2025/10/12 17:08:56 Error seeding users: pq: duplicate key value violates unique constraint "users_email_key"
-[GIN] 2025/10/12 - 17:08:56 | 200 |    1.990538ms |             ::1 | POST     "/seed"
-2025/10/12 17:08:56 Login request from origin: 
-2025/10/12 17:08:56 Login request method: POST
-2025/10/12 17:08:56 Login attempt for email: employee@example.com
-[GIN] 2025/10/12 - 17:08:56 | 200 |    1.153459ms |             ::1 | POST     "/api/login"
-[GIN] 2025/10/12 - 17:08:59 | 200 |    1.181654ms |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/12 - 17:09:00 | 200 |     647.445µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:18:21 | 200 |      193.16µs |             ::1 | GET      "/api/health"
+2025/10/13 04:18:21 Error seeding users: pq: duplicate key value violates unique constraint "users_email_key"
+[GIN] 2025/10/13 - 04:18:21 | 200 |   48.027156ms |             ::1 | POST     "/seed"
+2025/10/13 04:18:21 Login request from origin: 
+2025/10/13 04:18:21 Login request method: POST
+2025/10/13 04:18:21 Login attempt for email: employee@example.com
+[GIN] 2025/10/13 - 04:18:21 | 200 |   62.257602ms |             ::1 | POST     "/api/login"
+[GIN] 2025/10/13 - 04:18:50 | 204 |      29.525µs |             ::1 | OPTIONS  "/api/login"
+2025/10/13 04:18:50 Login request from origin: http://127.0.0.1:3000
+2025/10/13 04:18:50 Login request method: POST
+2025/10/13 04:18:50 Login attempt for email: hr@example.com
+[GIN] 2025/10/13 - 04:18:50 | 401 |     799.006µs |             ::1 | POST     "/api/login"
+2025/10/13 04:18:59 Login request from origin: http://127.0.0.1:3000
+2025/10/13 04:18:59 Login request method: POST
+2025/10/13 04:18:59 Login attempt for email: hr@example.com
+[GIN] 2025/10/13 - 04:18:59 | 200 |     833.152µs |             ::1 | POST     "/api/login"
+[GIN] 2025/10/13 - 04:19:01 | 204 |      31.409µs |             ::1 | OPTIONS  "/api/users"
+[GIN] 2025/10/13 - 04:19:01 | 204 |        4.96µs |             ::1 | OPTIONS  "/api/users"
+[GIN] 2025/10/13 - 04:19:01 | 200 |    2.217486ms |             ::1 | GET      "/api/users"
+[GIN] 2025/10/13 - 04:19:01 | 200 |      366.63µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/13 - 04:19:02 | 200 |     491.459µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/13 - 04:19:02 | 200 |     296.401µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/13 - 04:19:12 | 204 |       9.699µs |             ::1 | OPTIONS  "/api/courses"
+[GIN] 2025/10/13 - 04:19:12 | 204 |       3.466µs |             ::1 | OPTIONS  "/api/courses"
+[GIN] 2025/10/13 - 04:19:12 | 200 |    1.360235ms |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:19:12 | 200 |     401.033µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:19:17 | 200 |     587.653µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:19:17 | 200 |     455.447µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:19:25 | 200 |     571.613µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:19:25 | 200 |     427.531µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:19:33 | 200 |     594.287µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/13 - 04:19:33 | 200 |     472.156µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/13 - 04:19:34 | 200 |     447.093µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/13 - 04:19:34 | 200 |     288.893µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/13 - 04:19:38 | 200 |      621.33µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:19:38 | 200 |     425.659µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:19:49 | 200 |     666.061µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/13 - 04:19:49 | 200 |     399.203µs |             ::1 | GET      "/api/courses"
 signal: interrupt

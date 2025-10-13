@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { ClockIcon, UserIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect } from 'react';
 import { courseService } from '../../../services/course.service';
+import { userService } from '../../../services/user.service';
 import { COURSE_CATEGORIES } from '../../../constants/categories';
 
 function AddCourse() {
@@ -8,6 +8,7 @@ function AddCourse() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [users, setUsers] = useState([]);
   const [newCourse, setNewCourse] = useState({
     title: '',
     description: '',
@@ -16,8 +17,8 @@ function AddCourse() {
     video_url: '', // Changed from videoUrl to video_url to match backend
     instructor: '',
     image: '',
-    visibility: 'public', // public, hidden, role-specific
-    allowedRoles: [], // สำหรับ role-specific visibility
+    visibility: 'all', // 'all' = everyone can see, 'specific' = selected users only
+    selectedUsers: [], // Array of user IDs who can access this course
     quiz: {
       questions: [
         {
@@ -42,6 +43,21 @@ function AddCourse() {
     }
   });
 
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const data = await userService.getAllUsers();
+      const userList = data.users || data || [];
+      // Filter out HR users, only show employees
+      setUsers(userList.filter(u => u.role === 'employee'));
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (currentStep < 4) {
@@ -61,6 +77,8 @@ function AddCourse() {
         category: newCourse.category,
         duration: parseInt(newCourse.duration) || 0,
         video_url: newCourse.video_url,
+        visibility: newCourse.visibility,
+        selectedUsers: newCourse.visibility === 'specific' ? newCourse.selectedUsers : [],
         quiz: newCourse.quiz,
         writtenExam: newCourse.writtenExam
       };
@@ -81,8 +99,8 @@ function AddCourse() {
         video_url: '',
         instructor: '',
         image: '',
-        visibility: 'public',
-        allowedRoles: [],
+        visibility: 'all',
+        selectedUsers: [],
         quiz: {
           questions: [
             {
@@ -234,38 +252,74 @@ function AddCourse() {
               </label>
               <select
                 value={newCourse.visibility}
-                onChange={(e) => setNewCourse({ ...newCourse, visibility: e.target.value })}
+                onChange={(e) => {
+                  setNewCourse({
+                    ...newCourse,
+                    visibility: e.target.value,
+                    selectedUsers: [] // Reset selected users when changing visibility
+                  });
+                }}
                 className="w-full p-2 border border-gray-300 rounded-md mb-2"
                 required
               >
-                <option value="public">เปิดให้ทุกคนเห็น</option>
-                <option value="hidden">ซ่อนทั้งหมด</option>
-                <option value="role-specific">จำกัดตามตำแหน่ง</option>
+                <option value="all">เปิดให้ทุกคนเห็น</option>
+                <option value="specific">เลือกผู้ใช้เฉพาะ</option>
+                <option value="hidden">ซ่อนจากทุกคน</option>
               </select>
 
-              {newCourse.visibility === 'role-specific' && (
-                <div className="space-y-2">
+              {newCourse.visibility === 'specific' && (
+                <div className="mt-4 space-y-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    เลือกตำแหน่งที่สามารถมองเห็นได้
+                    เลือกผู้ใช้ที่สามารถเห็นคอร์สนี้
                   </label>
-                  <div className="space-y-2">
-                    {COURSE_CATEGORIES.map((category) => (
-                      <label key={category.value} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={newCourse.allowedRoles.includes(category.value)}
-                          onChange={(e) => {
-                            const updatedRoles = e.target.checked
-                              ? [...newCourse.allowedRoles, category.value]
-                              : newCourse.allowedRoles.filter(r => r !== category.value);
-                            setNewCourse({ ...newCourse, allowedRoles: updatedRoles });
-                          }}
-                          className="h-4 w-4 text-blue-600"
-                        />
-                        <span className="text-sm text-gray-700">{category.icon} {category.label}</span>
-                      </label>
-                    ))}
+                  <div className="border border-gray-300 rounded-md p-3 max-h-60 overflow-y-auto bg-gray-50">
+                    {users.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-2">ไม่พบผู้ใช้ในระบบ</p>
+                    ) : (
+                      <div className="space-y-2">
+                        <label className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newCourse.selectedUsers.length === users.length}
+                            onChange={(e) => {
+                              const allUserIds = users.map(u => u.id);
+                              setNewCourse({
+                                ...newCourse,
+                                selectedUsers: e.target.checked ? allUserIds : []
+                              });
+                            }}
+                            className="h-4 w-4 text-blue-600 rounded"
+                          />
+                          <span className="text-sm font-medium text-gray-700">เลือกทั้งหมด</span>
+                        </label>
+                        <div className="border-t border-gray-200 my-2"></div>
+                        {users.map((user) => (
+                          <label key={user.id} className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={newCourse.selectedUsers.includes(user.id)}
+                              onChange={(e) => {
+                                const updatedUsers = e.target.checked
+                                  ? [...newCourse.selectedUsers, user.id]
+                                  : newCourse.selectedUsers.filter(id => id !== user.id);
+                                setNewCourse({ ...newCourse, selectedUsers: updatedUsers });
+                              }}
+                              className="h-4 w-4 text-blue-600 rounded"
+                            />
+                            <div className="flex-1">
+                              <span className="text-sm text-gray-700 font-medium">{user.name}</span>
+                              <span className="text-xs text-gray-500 ml-2">({user.email})</span>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                  {newCourse.selectedUsers.length > 0 && (
+                    <p className="text-xs text-gray-600 mt-2">
+                      เลือกแล้ว: {newCourse.selectedUsers.length} คน
+                    </p>
+                  )}
                 </div>
               )}
             </div>
