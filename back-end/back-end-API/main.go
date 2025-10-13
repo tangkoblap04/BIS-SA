@@ -1041,11 +1041,11 @@ func main() {
 			})
 		})
 
-		// Get written exam answers by course
-		api.GET("/written-exam-answers/:courseId", func(c *gin.Context) {
+		// Get all exam answers by course (both multiple choice and written)
+		api.GET("/exam-answers/:courseId", func(c *gin.Context) {
 			courseID := c.Param("courseId")
 
-			// Query to get written exam results with user info and questions
+			// Query to get all exam results grouped by user
 			query := `
 				SELECT 
 					er.id,
@@ -1053,6 +1053,7 @@ func main() {
 					u.name as user_name,
 					er.exam_id,
 					e.title as exam_title,
+					e.type as exam_type,
 					er.answers,
 					er.score,
 					er.created_at
@@ -1060,20 +1061,20 @@ func main() {
 				JOIN users u ON er.user_id = u.id
 				JOIN exams e ON er.exam_id = e.id
 				WHERE er.course_id = $1 
-					AND e.type = 'written'
 					AND e.deleted_at IS NULL
-				ORDER BY er.created_at DESC
+				ORDER BY er.user_id, e.type, er.created_at DESC
 			`
 
 			rows, err := db.Query(query, courseID)
 			if err != nil {
-				log.Printf("Error fetching written exam answers: %v", err)
+				log.Printf("Error fetching exam answers: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch answers"})
 				return
 			}
 			defer rows.Close()
 
-			var results []map[string]interface{}
+			// Group results by user
+			userResultsMap := make(map[int]map[string]interface{})
 
 			for rows.Next() {
 				var result struct {
@@ -1082,16 +1083,28 @@ func main() {
 					UserName  string
 					ExamID    int
 					ExamTitle string
+					ExamType  string
 					Answers   string
 					Score     float64
 					CreatedAt time.Time
 				}
 
 				err := rows.Scan(&result.ID, &result.UserID, &result.UserName, &result.ExamID,
-					&result.ExamTitle, &result.Answers, &result.Score, &result.CreatedAt)
+					&result.ExamTitle, &result.ExamType, &result.Answers, &result.Score, &result.CreatedAt)
 				if err != nil {
 					log.Printf("Error scanning row: %v", err)
 					continue
+				}
+
+				// Initialize user entry if not exists
+				if _, exists := userResultsMap[result.UserID]; !exists {
+					userResultsMap[result.UserID] = map[string]interface{}{
+						"user_id":         result.UserID,
+						"user_name":       result.UserName,
+						"submitted_at":    result.CreatedAt,
+						"multiple_choice": nil,
+						"written":         nil,
+					}
 				}
 
 				// Parse answers JSON
@@ -1101,58 +1114,124 @@ func main() {
 					continue
 				}
 
-				// Get questions for this exam
-				questionQuery := `
-					SELECT id, question_text, points
-					FROM questions
-					WHERE exam_id = $1 AND deleted_at IS NULL
-					ORDER BY id
-				`
-				questionRows, err := db.Query(questionQuery, result.ExamID)
-				if err != nil {
-					log.Printf("Error fetching questions: %v", err)
-					continue
-				}
-
-				var questionAnswers []map[string]interface{}
-				for questionRows.Next() {
-					var q struct {
-						ID           int
-						QuestionText string
-						Points       int
-					}
-					if err := questionRows.Scan(&q.ID, &q.QuestionText, &q.Points); err != nil {
+				if result.ExamType == "multiple_choice" {
+					// For multiple choice, calculate score
+					questionQuery := `
+						SELECT id, correct_answer
+						FROM questions
+						WHERE exam_id = $1 AND deleted_at IS NULL
+						ORDER BY id
+					`
+					questionRows, err := db.Query(questionQuery, result.ExamID)
+					if err != nil {
+						log.Printf("Error fetching MC questions: %v", err)
 						continue
 					}
 
-					// Get answer for this question from answers map
-					questionIDStr := fmt.Sprintf("%d", q.ID)
-					answer := ""
-					if answerVal, ok := answersMap[questionIDStr]; ok {
-						if answerStr, ok := answerVal.(string); ok {
-							answer = answerStr
+					totalQuestions := 0
+					correctAnswers := 0
+					for questionRows.Next() {
+						var qID int
+						var correctAnswer sql.NullString
+						if err := questionRows.Scan(&qID, &correctAnswer); err != nil {
+							continue
+						}
+						totalQuestions++
+
+						// Check if answer is correct
+						qIDStr := fmt.Sprintf("%d", qID)
+						if userAnswer, ok := answersMap[qIDStr]; ok {
+							// Convert user answer to int
+							var userAnswerInt int
+							switch v := userAnswer.(type) {
+							case float64:
+								userAnswerInt = int(v)
+							case int:
+								userAnswerInt = v
+							}
+
+							// Convert correct answer to int
+							if correctAnswer.Valid {
+								var correctAnswerInt int
+								fmt.Sscanf(correctAnswer.String, "%d", &correctAnswerInt)
+								if userAnswerInt == correctAnswerInt {
+									correctAnswers++
+								}
+							}
 						}
 					}
+					questionRows.Close()
 
-					questionAnswers = append(questionAnswers, map[string]interface{}{
-						"question_id":   q.ID,
-						"question_text": q.QuestionText,
-						"answer":        answer,
-						"points":        q.Points,
-					})
+					score := 0.0
+					if totalQuestions > 0 {
+						score = (float64(correctAnswers) / float64(totalQuestions)) * 100
+					}
+
+					userResultsMap[result.UserID]["multiple_choice"] = map[string]interface{}{
+						"exam_id":         result.ExamID,
+						"exam_title":      result.ExamTitle,
+						"score":           score,
+						"total_questions": totalQuestions,
+						"correct_answers": correctAnswers,
+						"submitted_at":    result.CreatedAt,
+					}
+
+				} else if result.ExamType == "written" {
+					// For written exam, get questions and answers
+					questionQuery := `
+						SELECT id, question_text, points
+						FROM questions
+						WHERE exam_id = $1 AND deleted_at IS NULL
+						ORDER BY id
+					`
+					questionRows, err := db.Query(questionQuery, result.ExamID)
+					if err != nil {
+						log.Printf("Error fetching written questions: %v", err)
+						continue
+					}
+
+					var questionAnswers []map[string]interface{}
+					for questionRows.Next() {
+						var q struct {
+							ID           int
+							QuestionText string
+							Points       int
+						}
+						if err := questionRows.Scan(&q.ID, &q.QuestionText, &q.Points); err != nil {
+							continue
+						}
+
+						// Get answer for this question from answers map
+						questionIDStr := fmt.Sprintf("%d", q.ID)
+						answer := ""
+						if answerVal, ok := answersMap[questionIDStr]; ok {
+							if answerStr, ok := answerVal.(string); ok {
+								answer = answerStr
+							}
+						}
+
+						questionAnswers = append(questionAnswers, map[string]interface{}{
+							"question_id":   q.ID,
+							"question_text": q.QuestionText,
+							"answer":        answer,
+							"points":        q.Points,
+						})
+					}
+					questionRows.Close()
+
+					userResultsMap[result.UserID]["written"] = map[string]interface{}{
+						"exam_id":          result.ExamID,
+						"exam_title":       result.ExamTitle,
+						"question_answers": questionAnswers,
+						"submitted_at":     result.CreatedAt,
+					}
 				}
-				questionRows.Close()
+			}
 
-				results = append(results, map[string]interface{}{
-					"id":               result.ID,
-					"user_id":          result.UserID,
-					"user_name":        result.UserName,
-					"exam_id":          result.ExamID,
-					"exam_title":       result.ExamTitle,
-					"question_answers": questionAnswers,
-					"score":            result.Score,
-					"submitted_at":     result.CreatedAt,
-				})
+			// Convert map to array
+			var results []map[string]interface{}
+			for _, userResult := range userResultsMap {
+				results = append(results, userResult)
 			}
 
 			if results == nil {

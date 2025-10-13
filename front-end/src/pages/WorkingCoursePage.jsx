@@ -24,7 +24,17 @@ function WorkingCoursePage() {
 
             // Fetch courses with user_id for access filtering
             const response = await courseService.getAllCourses(user?.id);
-            const coursesData = response.courses || response || [];
+
+            // Ensure coursesData is always an array
+            let coursesData = [];
+            if (Array.isArray(response)) {
+                coursesData = response;
+            } else if (response && Array.isArray(response.courses)) {
+                coursesData = response.courses;
+            } else if (response && response.courses) {
+                coursesData = [];
+            }
+
             setCourses(coursesData);
         } catch (error) {
             console.error('Error fetching courses:', error);

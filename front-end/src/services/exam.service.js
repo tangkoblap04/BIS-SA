@@ -67,6 +67,26 @@ class ExamService {
             throw error;
         }
     }
+
+    // ดึงคำตอบข้อสอบทั้งหมด (ปรนัยและข้อเขียน) ตาม course ID
+    async getAllExamAnswers(courseId) {
+        try {
+            const response = await fetch(`${BASE_URL}/exam-answers/${courseId}`, {
+                headers: authService.getAuthHeader()
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to fetch exam answers');
+            }
+
+            const data = await response.json();
+            return data.answers || [];
+        } catch (error) {
+            console.error('Get all exam answers error:', error);
+            throw error;
+        }
+    }
 }
 
 export const examService = new ExamService();
