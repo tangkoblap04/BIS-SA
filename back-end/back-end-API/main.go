@@ -1019,8 +1019,80 @@ func main() {
 				return
 			}
 
-			// คำนวณคะแนน (ตอนนี้ให้ 0 ก่อน สามารถปรับปรุงการคำนวณได้)
+			// Calculate score for multiple choice exams
 			score := 0.0
+
+			// Get exam type
+			var examType string
+			err = db.QueryRow("SELECT type FROM exams WHERE id = $1", examResult.ExamID).Scan(&examType)
+			if err != nil {
+				log.Printf("Error fetching exam type: %v", err)
+			}
+
+			// If it's multiple choice, calculate the score
+			if examType == "multiple_choice" {
+				// Get all questions and correct answers for this exam
+				questionQuery := `
+					SELECT id, correct_answer 
+					FROM questions 
+					WHERE exam_id = $1 AND deleted_at IS NULL
+				`
+				questionRows, err := db.Query(questionQuery, examResult.ExamID)
+				if err != nil {
+					log.Printf("Error fetching questions: %v", err)
+				} else {
+					defer questionRows.Close()
+
+					totalQuestions := 0
+					correctAnswers := 0
+
+					for questionRows.Next() {
+						var questionID int
+						var correctAnswer string
+
+						if err := questionRows.Scan(&questionID, &correctAnswer); err != nil {
+							log.Printf("Error scanning question: %v", err)
+							continue
+						}
+
+						totalQuestions++
+
+						// Check if user's answer matches correct answer
+						questionIDStr := fmt.Sprintf("%d", questionID)
+						if userAnswer, ok := examResult.Answers[questionIDStr]; ok {
+							isCorrect := false
+
+							// Handle both string and number answers
+							switch v := userAnswer.(type) {
+							case string:
+								isCorrect = (v == correctAnswer)
+							case float64:
+								// Convert number to string for comparison
+								isCorrect = (fmt.Sprintf("%.0f", v) == correctAnswer)
+							case int:
+								isCorrect = (fmt.Sprintf("%d", v) == correctAnswer)
+							}
+
+							if isCorrect {
+								correctAnswers++
+								log.Printf("Question %d: Correct! User answer: %v, Correct answer: %s",
+									questionID, userAnswer, correctAnswer)
+							} else {
+								log.Printf("Question %d: Wrong. User answer: %v, Correct answer: %s",
+									questionID, userAnswer, correctAnswer)
+							}
+						}
+					}
+
+					// Calculate percentage score
+					if totalQuestions > 0 {
+						score = (float64(correctAnswers) / float64(totalQuestions)) * 100.0
+					}
+
+					log.Printf("Score calculation: %d correct out of %d questions = %.2f%%",
+						correctAnswers, totalQuestions, score)
+				}
+			}
 
 			var resultID int
 			err = db.QueryRow(`
@@ -1430,6 +1502,147 @@ func main() {
 				"recent_exams":    recentExams,
 				"weekly_progress": weeklyProgress,
 				"achievements":    achievements,
+			})
+		})
+
+		// HR Dashboard Stats endpoint
+		api.GET("/hr/dashboard-stats", func(c *gin.Context) {
+			// Get total employees (role = 'employee')
+			var totalEmployees int
+			err := db.QueryRow("SELECT COUNT(*) FROM users WHERE role = 'employee'").Scan(&totalEmployees)
+			if err != nil {
+				log.Printf("Error counting employees: %v", err)
+				totalEmployees = 0
+			}
+
+			// Get employees with course assignments
+			var assignedEmployees int
+			assignQuery := `
+				SELECT COUNT(DISTINCT user_id) 
+				FROM course_access 
+				WHERE user_id IN (SELECT id FROM users WHERE role = 'employee')
+			`
+			err = db.QueryRow(assignQuery).Scan(&assignedEmployees)
+			if err != nil {
+				log.Printf("Error counting assigned employees: %v", err)
+				assignedEmployees = 0
+			}
+
+			// Get all exam scores from employees
+			scoreQuery := `
+				SELECT u.name, er.score, c.title as course_title, e.title as exam_title, er.created_at
+				FROM exam_results er
+				JOIN users u ON er.user_id = u.id
+				JOIN courses c ON er.course_id = c.id
+				JOIN exams e ON er.exam_id = e.id
+				WHERE u.role = 'employee' 
+					AND e.type = 'multiple_choice'
+					AND e.deleted_at IS NULL
+				ORDER BY er.created_at DESC
+				LIMIT 10
+			`
+			rows, err := db.Query(scoreQuery)
+
+			var scores []map[string]interface{}
+			var totalScore float64 = 0
+			var maxScore float64 = 0
+			var minScore float64 = 100
+			scoreCount := 0
+
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var name, courseTitle, examTitle string
+					var score float64
+					var createdAt time.Time
+
+					if err := rows.Scan(&name, &score, &courseTitle, &examTitle, &createdAt); err != nil {
+						continue
+					}
+
+					scores = append(scores, map[string]interface{}{
+						"name":         name,
+						"score":        score,
+						"course_title": courseTitle,
+						"exam_title":   examTitle,
+						"created_at":   createdAt,
+					})
+
+					totalScore += score
+					if score > maxScore {
+						maxScore = score
+					}
+					if score < minScore {
+						minScore = score
+					}
+					scoreCount++
+				}
+			}
+
+			avgScore := 0.0
+			if scoreCount > 0 {
+				avgScore = totalScore / float64(scoreCount)
+			} else {
+				minScore = 0
+			}
+
+			// Get course progress statistics
+			// Use course_access for enrollment count and exam_results for completion
+			progressQuery := `
+				SELECT 
+					c.id,
+					c.title,
+					COUNT(DISTINCT ca.user_id) as total_enrolled,
+					COUNT(DISTINCT er.user_id) as completed_count
+				FROM courses c
+				LEFT JOIN course_access ca ON c.id = ca.course_id
+				LEFT JOIN exam_results er ON c.id = er.course_id 
+					AND er.user_id IN (SELECT id FROM users WHERE role = 'employee')
+				WHERE ca.user_id IN (SELECT id FROM users WHERE role = 'employee')
+				GROUP BY c.id, c.title
+				HAVING COUNT(DISTINCT ca.user_id) > 0
+				ORDER BY total_enrolled DESC
+				LIMIT 5
+			`
+			progressRows, err := db.Query(progressQuery)
+
+			var courseProgress []map[string]interface{}
+			if err == nil {
+				defer progressRows.Close()
+				for progressRows.Next() {
+					var id, totalEnrolled, completedCount int
+					var title string
+
+					if err := progressRows.Scan(&id, &title, &totalEnrolled, &completedCount); err != nil {
+						log.Printf("Error scanning course progress: %v", err)
+						continue
+					}
+
+					courseProgress = append(courseProgress, map[string]interface{}{
+						"id":        id,
+						"name":      title,
+						"total":     totalEnrolled,
+						"completed": completedCount,
+					})
+				}
+			} else {
+				log.Printf("Error fetching course progress: %v", err)
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"employee_stats": map[string]interface{}{
+					"total":      totalEmployees,
+					"assigned":   assignedEmployees,
+					"unassigned": totalEmployees - assignedEmployees,
+				},
+				"exam_scores": map[string]interface{}{
+					"scores":      scores,
+					"max_score":   maxScore,
+					"min_score":   minScore,
+					"avg_score":   avgScore,
+					"score_count": scoreCount,
+				},
+				"course_progress": courseProgress,
 			})
 		})
 

@@ -32,6 +32,31 @@ class DashboardService {
         }
     }
 
+    // Get HR Dashboard statistics
+    async getHRDashboardStats() {
+        try {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...authService.getAuthHeader()
+            };
+
+            const response = await fetch(`${BASE_URL}/hr/dashboard-stats`, {
+                method: 'GET',
+                headers,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch HR dashboard stats');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('HR Dashboard stats error:', error);
+            throw error;
+        }
+    }
+
     async updateCourseProgress(userId, courseId, progress) {
         try {
             const headers = {
