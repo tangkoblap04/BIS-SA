@@ -1,4 +1,4 @@
-2025/10/13 12:11:06 Successfully connected to database
+2025/10/14 02:09:59 Successfully connected to database
 [GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
 
 [GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
@@ -28,77 +28,53 @@
 [GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
 Please check https://github.com/gin-gonic/gin/blob/master/docs/doc.md#dont-trust-all-proxies for details.
 [GIN-debug] Listening and serving HTTP on :8080
-[GIN] 2025/10/13 - 12:11:07 | 200 |    1.336646ms |             ::1 | GET      "/api/health"
-[GIN] 2025/10/13 - 12:11:07 | 404 |         651ns |             ::1 | POST     "/seed"
-2025/10/13 12:11:07 Login request from origin: 
-2025/10/13 12:11:07 Login request method: POST
-2025/10/13 12:11:07 Login attempt for email: employee@example.com
-[GIN] 2025/10/13 - 12:11:07 | 200 |  365.278162ms |             ::1 | POST     "/api/login"
-[GIN] 2025/10/13 - 12:11:34 | 200 |  114.176224ms |             ::1 | GET      "/api/hr/dashboard-stats"
-[GIN] 2025/10/13 - 12:11:34 | 200 |    1.861071ms |             ::1 | GET      "/api/hr/dashboard-stats"
-[GIN] 2025/10/13 - 12:11:34 | 200 |    1.976011ms |             ::1 | GET      "/api/hr/dashboard-stats"
-[GIN] 2025/10/13 - 12:11:34 | 200 |    1.808352ms |             ::1 | GET      "/api/hr/dashboard-stats"
-[GIN] 2025/10/13 - 12:11:36 | 200 |     444.219µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:11:36 | 200 |     358.173µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:11:37 | 200 |     517.034µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:11:37 | 200 |     445.316µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:11:37 | 200 |     426.545µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:11:37 | 200 |      390.52µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:11:39 | 200 |     494.901µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:11:39 | 200 |     392.714µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:12:31 | 200 |     583.067µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:12:31 | 200 |      586.27µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:12:32 | 200 |     714.344µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:12:32 | 200 |     379.587µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:12:32 | 200 |     602.143µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:12:32 | 200 |     285.606µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:12:34 | 200 |     496.355µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:12:34 | 200 |     996.777µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:13:25 | 201 |    9.114543ms |             ::1 | POST     "/api/courses"
-[GIN] 2025/10/13 - 12:15:30 | 201 |    5.534315ms |             ::1 | POST     "/api/courses"
-[GIN] 2025/10/13 - 12:16:00 | 200 |     671.763µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:16:00 | 200 |     289.282µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:16:00 | 200 |     580.893µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:16:00 | 200 |     336.593µs |             ::1 | GET      "/api/users"
-[GIN] 2025/10/13 - 12:16:14 | 204 |       8.035µs |             ::1 | OPTIONS  "/api/courses/9"
-[GIN] 2025/10/13 - 12:16:14 | 200 |    9.701229ms |             ::1 | DELETE   "/api/courses/9"
-[GIN] 2025/10/13 - 12:16:17 | 200 |    1.033914ms |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:16:32 | 200 |     629.082µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:16:32 | 200 |      586.77µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:16:38 | 204 |       6.122µs |             ::1 | OPTIONS  "/api/exam-answers/10"
-[GIN] 2025/10/13 - 12:16:38 | 200 |    1.348545ms |             ::1 | GET      "/api/exam-answers/10"
-[GIN] 2025/10/13 - 12:16:49 | 200 |    6.543403ms |             ::1 | GET      "/api/exam-answers/6"
-[GIN] 2025/10/13 - 12:17:21 | 200 |    2.892174ms |             ::1 | GET      "/api/hr/dashboard-stats"
-2025/10/13 12:18:26 Login request from origin: http://127.0.0.1:3000
-2025/10/13 12:18:26 Login request method: POST
-2025/10/13 12:18:26 Login attempt for email: montri05122547@gmail.com
-[GIN] 2025/10/13 - 12:18:26 | 401 |      895.93µs |             ::1 | POST     "/api/login"
-2025/10/13 12:18:53 Login request from origin: http://127.0.0.1:3000
-2025/10/13 12:18:53 Login request method: POST
-2025/10/13 12:18:53 Login attempt for email: montri05122547@gmail.com
-[GIN] 2025/10/13 - 12:18:53 | 200 |     833.294µs |             ::1 | POST     "/api/login"
-[GIN] 2025/10/13 - 12:18:53 | 200 |      625.01µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:18:53 | 200 |     580.123µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:19:14 | 204 |       7.294µs |             ::1 | OPTIONS  "/api/courses?user_id=15"
-[GIN] 2025/10/13 - 12:19:14 | 204 |       4.228µs |             ::1 | OPTIONS  "/api/courses?user_id=15"
-[GIN] 2025/10/13 - 12:19:14 | 200 |    1.424931ms |             ::1 | GET      "/api/courses?user_id=15"
-[GIN] 2025/10/13 - 12:19:14 | 200 |     1.07874ms |             ::1 | GET      "/api/courses?user_id=15"
-[GIN] 2025/10/13 - 12:19:20 | 204 |       7.374µs |             ::1 | OPTIONS  "/api/courses/10"
-[GIN] 2025/10/13 - 12:19:20 | 204 |       3.607µs |             ::1 | OPTIONS  "/api/courses/10"
-[GIN] 2025/10/13 - 12:19:20 | 200 |     765.328µs |             ::1 | GET      "/api/courses/10"
-[GIN] 2025/10/13 - 12:19:20 | 200 |     797.577µs |             ::1 | GET      "/api/courses/10"
-[GIN] 2025/10/13 - 12:19:25 | 204 |       7.615µs |             ::1 | OPTIONS  "/api/exams/course/10"
-[GIN] 2025/10/13 - 12:19:25 | 204 |       4.368µs |             ::1 | OPTIONS  "/api/exams/course/10"
-[GIN] 2025/10/13 - 12:19:25 | 200 |    1.587203ms |             ::1 | GET      "/api/exams/course/10"
-[GIN] 2025/10/13 - 12:19:25 | 200 |    1.829713ms |             ::1 | GET      "/api/exams/course/10"
-2025/10/13 12:19:38 Question 28: Correct! User answer: 0, Correct answer: 0
-2025/10/13 12:19:38 Score calculation: 1 correct out of 1 questions = 100.00%
-[GIN] 2025/10/13 - 12:19:38 | 200 |    2.825251ms |             ::1 | POST     "/api/exam-results"
-[GIN] 2025/10/13 - 12:19:41 | 200 |    1.498454ms |             ::1 | GET      "/api/exams/course/10"
-[GIN] 2025/10/13 - 12:19:41 | 200 |    1.344829ms |             ::1 | GET      "/api/exams/course/10"
-[GIN] 2025/10/13 - 12:20:02 | 200 |    2.016809ms |             ::1 | POST     "/api/exam-results"
-[GIN] 2025/10/13 - 12:20:14 | 200 |     954.097µs |             ::1 | GET      "/api/courses?user_id=15"
-[GIN] 2025/10/13 - 12:20:14 | 200 |     960.592µs |             ::1 | GET      "/api/courses?user_id=15"
-[GIN] 2025/10/13 - 12:20:22 | 200 |     749.007µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:20:22 | 200 |     593.195µs |             ::1 | GET      "/api/courses"
-[GIN] 2025/10/13 - 12:20:24 | 200 |     1.77616ms |             ::1 | GET      "/api/exam-answers/10"
+[GIN] 2025/10/14 - 02:11:55 | 200 |     1.35587ms |             ::1 | GET      "/api/health"
+[GIN] 2025/10/14 - 02:12:43 | 200 |      38.321µs |             ::1 | GET      "/api/health"
+[GIN] 2025/10/14 - 02:12:43 | 200 |   78.290218ms |             ::1 | GET      "/api/users"
+2025/10/14 02:12:43 Login request from origin: 
+2025/10/14 02:12:43 Login request method: POST
+2025/10/14 02:12:43 Login attempt for email: employee@example.com
+[GIN] 2025/10/14 - 02:12:44 | 200 |  105.295424ms |             ::1 | POST     "/api/login"
+[GIN] 2025/10/14 - 02:13:15 | 204 |      28.823µs |             ::1 | OPTIONS  "/api/courses"
+[GIN] 2025/10/14 - 02:13:15 | 204 |      14.637µs |             ::1 | OPTIONS  "/api/courses"
+[GIN] 2025/10/14 - 02:13:15 | 200 |    2.175701ms |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/14 - 02:13:15 | 200 |     510.563µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/14 - 02:13:26 | 204 |       5.471µs |             ::1 | OPTIONS  "/api/login"
+2025/10/14 02:13:26 Login request from origin: http://127.0.0.1:3000
+2025/10/14 02:13:26 Login request method: POST
+2025/10/14 02:13:26 Login attempt for email: hr@example.com
+[GIN] 2025/10/14 - 02:13:26 | 200 |     754.145µs |             ::1 | POST     "/api/login"
+[GIN] 2025/10/14 - 02:13:26 | 204 |       5.901µs |             ::1 | OPTIONS  "/api/hr/dashboard-stats"
+[GIN] 2025/10/14 - 02:13:26 | 204 |       5.299µs |             ::1 | OPTIONS  "/api/hr/dashboard-stats"
+[GIN] 2025/10/14 - 02:13:27 | 200 |  158.169419ms |             ::1 | GET      "/api/hr/dashboard-stats"
+[GIN] 2025/10/14 - 02:13:27 | 200 |    2.042323ms |             ::1 | GET      "/api/hr/dashboard-stats"
+[GIN] 2025/10/14 - 02:13:29 | 204 |       6.873µs |             ::1 | OPTIONS  "/api/users"
+[GIN] 2025/10/14 - 02:13:29 | 204 |       3.516µs |             ::1 | OPTIONS  "/api/users"
+[GIN] 2025/10/14 - 02:13:29 | 200 |     451.853µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/14 - 02:13:29 | 200 |     464.079µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/14 - 02:13:36 | 204 |       5.961µs |             ::1 | OPTIONS  "/api/users/10"
+2025/10/14 02:13:36 User 10 deleted successfully with all related data
+[GIN] 2025/10/14 - 02:13:36 | 200 |    5.271087ms |             ::1 | DELETE   "/api/users/10"
+[GIN] 2025/10/14 - 02:13:42 | 204 |       5.841µs |             ::1 | OPTIONS  "/api/users/15"
+2025/10/14 02:13:42 User 15 deleted successfully with all related data
+[GIN] 2025/10/14 - 02:13:42 | 200 |    2.933293ms |             ::1 | DELETE   "/api/users/15"
+[GIN] 2025/10/14 - 02:13:45 | 200 |     556.329µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/14 - 02:13:45 | 200 |      439.84µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/14 - 02:13:46 | 200 |     576.093µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/14 - 02:13:46 | 200 |     544.927µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/14 - 02:13:58 | 200 |      598.72µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/14 - 02:13:58 | 200 |     535.653µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/14 - 02:14:03 | 204 |      11.742µs |             ::1 | OPTIONS  "/api/exam-answers/6"
+[GIN] 2025/10/14 - 02:14:03 | 200 |     882.638µs |             ::1 | GET      "/api/exam-answers/6"
+[GIN] 2025/10/14 - 02:14:05 | 204 |       6.772µs |             ::1 | OPTIONS  "/api/exam-answers/10"
+[GIN] 2025/10/14 - 02:14:05 | 200 |     827.607µs |             ::1 | GET      "/api/exam-answers/10"
+[GIN] 2025/10/14 - 02:14:08 | 200 |     522.382µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/14 - 02:14:08 | 200 |     409.865µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/14 - 02:14:08 | 200 |     301.815µs |             ::1 | GET      "/api/users"
+[GIN] 2025/10/14 - 02:14:08 | 200 |     417.281µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/14 - 02:14:12 | 204 |       6.202µs |             ::1 | OPTIONS  "/api/courses/10"
+[GIN] 2025/10/14 - 02:14:12 | 200 |    4.415161ms |             ::1 | DELETE   "/api/courses/10"
+[GIN] 2025/10/14 - 02:14:14 | 200 |     604.247µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/14 - 02:14:17 | 200 |     692.633µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/14 - 02:14:17 | 200 |     558.843µs |             ::1 | GET      "/api/courses"
+[GIN] 2025/10/14 - 02:14:18 | 200 |    1.962313ms |             ::1 | GET      "/api/hr/dashboard-stats"
