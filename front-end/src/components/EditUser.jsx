@@ -10,6 +10,7 @@ function EditUser() {
         name: '',
         email: '',
         role: 'employee',
+        position: '',
         password: '' // Optional - only if changing password
     });
 
@@ -54,6 +55,7 @@ function EditUser() {
                 name: userData.name || '',
                 email: userData.email || '',
                 role: userData.role || 'employee',
+                position: userData.position || '',
                 password: ''
             });
             setChangePassword(false);
@@ -228,7 +230,7 @@ function EditUser() {
                                 {/* Role Field */}
                                 <div>
                                     <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-                                        ตำแหน่ง <span className="text-red-500">*</span>
+                                        บทบาท <span className="text-red-500">*</span>
                                     </label>
                                     <select
                                         id="role"
@@ -241,6 +243,36 @@ function EditUser() {
                                         <option value="employee">พนักงาน</option>
                                         <option value="HR">HR</option>
                                     </select>
+                                </div>
+
+                                {/* Position Field */}
+                                <div>
+                                    <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-2">
+                                        ตำแหน่ง
+                                        {formData.role === 'employee' && <span className="text-red-500 ml-1">*</span>}
+                                    </label>
+                                    <select
+                                        id="position"
+                                        name="position"
+                                        value={formData.position}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        required={formData.role === 'employee'}
+                                        disabled={formData.role === 'HR'}
+                                    >
+                                        <option value="">-- เลือกตำแหน่ง --</option>
+                                        <option value="Manager">Manager (ผู้จัดการ)</option>
+                                        <option value="Waiter">Waiter (พนักงานเสิร์ฟ)</option>
+                                        <option value="Barista">Barista (บาริสต้า)</option>
+                                        <option value="Cashier">Cashier (แคชเชียร์)</option>
+                                        <option value="Service">Service (พนักงานบริการ)</option>
+                                    </select>
+                                    {formData.role === 'employee' && (
+                                        <p className="mt-1 text-xs text-gray-500">เลือกตำแหน่งงานของพนักงาน</p>
+                                    )}
+                                    {formData.role === 'HR' && (
+                                        <p className="mt-1 text-xs text-gray-500">HR ไม่ต้องระบุตำแหน่ง</p>
+                                    )}
                                 </div>
 
                                 {/* Change Password Checkbox */}

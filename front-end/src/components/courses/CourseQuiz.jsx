@@ -85,18 +85,8 @@ function CourseQuiz({ courseId, onComplete }) {
 
       await examService.submitExamResult(examResult);
 
-      const quizResult = {
-        userId: currentUser.id,
-        courseId: courseId,
-        examId: exam.id,
-        score: finalScore,
-        answers: answers,
-        completedAt: new Date().toISOString()
-      };
-
-      if (onComplete) {
-        onComplete(quizResult);
-      }
+      // ไม่เรียก onComplete ที่นี่ เพราะต้องรอให้ user กดปุ่ม "ไปทำข้อสอบเขียน"
+      // onComplete จะถูกเรียกจากปุ่มในส่วน showResult แทน
     } catch (error) {
       console.error('Error submitting exam result:', error);
       alert('เกิดข้อผิดพลาดในการส่งคำตอบ: ' + error.message);

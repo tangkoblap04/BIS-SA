@@ -6,4 +6,5 @@ type User struct {
     Password string `json:"password" gorm:"not null"`
     Role     string `json:"role" gorm:"not null"` // "HR" or "employee"
     Name     string `json:"name" gorm:"not null"`
+    Position string `json:"position"` // "Manager", "Waiter", "Barista", "Cashier", "Service"
 }

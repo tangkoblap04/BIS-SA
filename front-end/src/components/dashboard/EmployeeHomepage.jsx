@@ -67,6 +67,22 @@ function EmployeeHomepage() {
         generateWeeklyProgress();
     }, []);
 
+    // เพิ่ม effect สำหรับ refresh ข้อมูลเมื่อกลับมาที่หน้านี้
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                console.log('Homepage visible - refreshing data');
+                fetchCourses();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
+
     const fetchCourses = async () => {
         try {
             setLoading(true);
@@ -295,8 +311,8 @@ function EmployeeHomepage() {
                                                 <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                                                     <div
                                                         className={`h-2 rounded-full transition-all ${(course.progress || 0) === 100 ? 'bg-green-500'
-                                                                : (course.progress || 0) > 50 ? 'bg-blue-500'
-                                                                    : 'bg-yellow-500'
+                                                            : (course.progress || 0) > 50 ? 'bg-blue-500'
+                                                                : 'bg-yellow-500'
                                                             }`}
                                                         style={{ width: `${course.progress || 0}%` }}
                                                     ></div>
@@ -305,8 +321,8 @@ function EmployeeHomepage() {
                                         </div>
                                         <div className="flex items-center justify-between">
                                             <span className={`px-3 py-1 rounded-full text-sm font-medium ${(course.progress || 0) === 100 ? 'bg-green-100 text-green-800'
-                                                    : (course.progress || 0) > 0 ? 'bg-blue-100 text-blue-800'
-                                                        : 'bg-gray-100 text-gray-800'
+                                                : (course.progress || 0) > 0 ? 'bg-blue-100 text-blue-800'
+                                                    : 'bg-gray-100 text-gray-800'
                                                 }`}>
                                                 {course.progress || 0}%
                                             </span>

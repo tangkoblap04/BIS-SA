@@ -136,6 +136,25 @@ class CourseService {
         }
     }
 
+    // ดึงข้อมูล course positions (positions that can access a course)
+    async getCoursePositions(courseId) {
+        try {
+            const response = await fetch(`${BASE_URL}/courses/${courseId}/positions`, {
+                headers: authService.getAuthHeader()
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to fetch course positions');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Get course positions error:', error);
+            throw error;
+        }
+    }
+
     // ดึงข้อมูล progress ของผู้ใช้
     async getUserProgress(userId) {
         try {

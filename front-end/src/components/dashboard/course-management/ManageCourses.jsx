@@ -52,6 +52,8 @@ function ManageCourses() {
   const handleEdit = async (course) => {
     // Fetch course access if visibility is 'specific'
     let selectedUsers = [];
+    let selectedPositions = [];
+
     if (course.visibility === 'specific') {
       try {
         const accessData = await courseService.getCourseAccess(course.id);
@@ -61,9 +63,20 @@ function ManageCourses() {
       }
     }
 
+    // Fetch course positions if visibility is 'position'
+    if (course.visibility === 'position') {
+      try {
+        const positionsData = await courseService.getCoursePositions(course.id);
+        selectedPositions = positionsData.positions || [];
+      } catch (error) {
+        console.error('Error fetching course positions:', error);
+      }
+    }
+
     setSelectedCourse({
       ...course,
-      selectedUsers: selectedUsers
+      selectedUsers: selectedUsers,
+      selectedPositions: selectedPositions
     });
     setIsEditModalOpen(true);
   };
@@ -77,7 +90,8 @@ function ManageCourses() {
         duration: parseInt(selectedCourse.duration) || 0,
         video_url: selectedCourse.video_url,
         visibility: selectedCourse.visibility || 'all',
-        selectedUsers: selectedCourse.visibility === 'specific' ? (selectedCourse.selectedUsers || []) : []
+        selectedUsers: selectedCourse.visibility === 'specific' ? (selectedCourse.selectedUsers || []) : [],
+        selectedPositions: selectedCourse.visibility === 'position' ? (selectedCourse.selectedPositions || []) : []
       };
 
       await courseService.updateCourse(selectedCourse.id, updateData);
@@ -201,7 +215,8 @@ function ManageCourses() {
                   setSelectedCourse({
                     ...selectedCourse,
                     visibility: e.target.value,
-                    selectedUsers: [] // Reset selected users when changing visibility
+                    selectedUsers: [], // Reset selected users when changing visibility
+                    selectedPositions: [] // Reset selected positions when changing visibility
                   });
                 }}
                 className="w-full p-2 border border-gray-300 rounded-md mb-2"
@@ -209,6 +224,7 @@ function ManageCourses() {
               >
                 <option value="all">เปิดให้ทุกคนเห็น</option>
                 <option value="specific">เลือกผู้ใช้เฉพาะ</option>
+                <option value="position">เลือกตามตำแหน่ง</option>
                 <option value="hidden">ซ่อนจากทุกคน</option>
               </select>
 
@@ -264,6 +280,47 @@ function ManageCourses() {
                   {(selectedCourse.selectedUsers || []).length > 0 && (
                     <p className="text-xs text-gray-600 mt-2">
                       เลือกแล้ว: {(selectedCourse.selectedUsers || []).length} คน
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {selectedCourse.visibility === 'position' && (
+                <div className="mt-4 space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    เลือกตำแหน่งที่สามารถเห็นคอร์สนี้
+                  </label>
+                  <div className="border border-gray-300 rounded-md p-3 bg-gray-50">
+                    <div className="space-y-2">
+                      {[
+                        { value: 'Manager', label: 'Manager (ผู้จัดการ)', icon: '👔' },
+                        { value: 'Waiter', label: 'Waiter (พนักงานเสิร์ฟ)', icon: '🍽️' },
+                        { value: 'Barista', label: 'Barista (บาริสต้า)', icon: '☕' },
+                        { value: 'Cashier', label: 'Cashier (แคชเชียร์)', icon: '💰' },
+                        { value: 'Service', label: 'Service (พนักงานบริการ)', icon: '🔧' }
+                      ].map((position) => (
+                        <label key={position.value} className="flex items-center space-x-2 p-3 hover:bg-gray-100 rounded cursor-pointer border border-gray-200">
+                          <input
+                            type="checkbox"
+                            checked={(selectedCourse.selectedPositions || []).includes(position.value)}
+                            onChange={(e) => {
+                              const currentPositions = selectedCourse.selectedPositions || [];
+                              const updatedPositions = e.target.checked
+                                ? [...currentPositions, position.value]
+                                : currentPositions.filter(p => p !== position.value);
+                              setSelectedCourse({ ...selectedCourse, selectedPositions: updatedPositions });
+                            }}
+                            className="h-4 w-4 text-blue-600 rounded"
+                          />
+                          <span className="text-xl">{position.icon}</span>
+                          <span className="text-sm text-gray-700 font-medium">{position.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {(selectedCourse.selectedPositions || []).length > 0 && (
+                    <p className="text-xs text-gray-600 mt-2">
+                      เลือกแล้ว: {(selectedCourse.selectedPositions || []).length} ตำแหน่ง
                     </p>
                   )}
                 </div>

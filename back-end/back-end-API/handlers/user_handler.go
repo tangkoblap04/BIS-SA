@@ -15,6 +15,7 @@ type CreateUserRequest struct {
     Email    string `json:"email"`
     Password string `json:"password"`
     Role     string `json:"role"`
+    Position string `json:"position"`
 }
 
 // CreateUser สร้างผู้ใช้ใหม่
@@ -29,6 +30,19 @@ func CreateUser(db *gorm.DB) http.HandlerFunc {
         // Validate role
         if req.Role != "HR" && req.Role != "employee" {
             http.Error(w, "Invalid role. Must be 'HR' or 'employee'", http.StatusBadRequest)
+            return
+        }
+
+        // Validate position (optional field, only for employees)
+        validPositions := map[string]bool{
+            "Manager": true,
+            "Waiter":  true,
+            "Barista": true,
+            "Cashier": true,
+            "Service": true,
+        }
+        if req.Position != "" && !validPositions[req.Position] {
+            http.Error(w, "Invalid position. Must be one of: Manager, Waiter, Barista, Cashier, Service", http.StatusBadRequest)
             return
         }
 
@@ -52,6 +66,7 @@ func CreateUser(db *gorm.DB) http.HandlerFunc {
             Email:    req.Email,
             Password: string(hashedPassword),
             Role:     req.Role,
+            Position: req.Position,
         }
 
         if err := db.Create(&user).Error; err != nil {
@@ -151,6 +166,7 @@ func UpdateUser(db *gorm.DB) http.HandlerFunc {
         user.Name = req.Name
         user.Email = req.Email
         user.Role = req.Role
+        user.Position = req.Position
 
         // Update password if provided
         if req.Password != "" {

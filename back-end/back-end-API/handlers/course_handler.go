@@ -109,12 +109,15 @@ func SubmitWrittenExam(c *gin.Context) {
 func CreateCourse(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req struct {
-			Title       string `json:"title" binding:"required"`
-			Description string `json:"description"`
-			Category    string `json:"category"`
-			Duration    int    `json:"duration"`
-			VideoURL    string `json:"video_url"`
-			Quiz        struct {
+			Title             string   `json:"title" binding:"required"`
+			Description       string   `json:"description"`
+			Category          string   `json:"category"`
+			Duration          int      `json:"duration"`
+			VideoURL          string   `json:"video_url"`
+			Visibility        string   `json:"visibility"`
+			SelectedUsers     []uint   `json:"selectedUsers"`
+			SelectedPositions []string `json:"selectedPositions"`
+			Quiz              struct {
 				Questions []struct {
 					ID            int      `json:"id"`
 					Question      string   `json:"question"`
@@ -152,6 +155,7 @@ func CreateCourse(db *gorm.DB) gin.HandlerFunc {
 			Category:    req.Category,
 			Duration:    req.Duration,
 			VideoURL:    req.VideoURL,
+			Visibility:  req.Visibility,
 			CreatedBy:   userID.(uint),
 		}
 
@@ -159,6 +163,44 @@ func CreateCourse(db *gorm.DB) gin.HandlerFunc {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create course"})
 			return
+		}
+
+		// Handle course access by specific users
+		if req.Visibility == "specific" && len(req.SelectedUsers) > 0 {
+			for _, userID := range req.SelectedUsers {
+				access := struct {
+					CourseID  uint `gorm:"column:course_id"`
+					UserID    uint `gorm:"column:user_id"`
+					GrantedBy uint `gorm:"column:granted_by"`
+				}{
+					CourseID:  course.ID,
+					UserID:    userID,
+					GrantedBy: course.CreatedBy,
+				}
+				if err := tx.Table("course_access").Create(&access).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set course access"})
+					return
+				}
+			}
+		}
+
+		// Handle course access by position
+		if req.Visibility == "position" && len(req.SelectedPositions) > 0 {
+			for _, position := range req.SelectedPositions {
+				posAccess := struct {
+					CourseID uint   `gorm:"column:course_id"`
+					Position string `gorm:"column:position"`
+				}{
+					CourseID: course.ID,
+					Position: position,
+				}
+				if err := tx.Table("course_positions").Create(&posAccess).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set course position access"})
+					return
+				}
+			}
 		}
 
 		// Create multiple choice exam if quiz questions exist
@@ -296,11 +338,14 @@ func UpdateCourse(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var req struct {
-			Title       string `json:"title"`
-			Description string `json:"description"`
-			Category    string `json:"category"`
-			Duration    int    `json:"duration"`
-			VideoURL    string `json:"video_url"`
+			Title             string   `json:"title"`
+			Description       string   `json:"description"`
+			Category          string   `json:"category"`
+			Duration          int      `json:"duration"`
+			VideoURL          string   `json:"video_url"`
+			Visibility        string   `json:"visibility"`
+			SelectedUsers     []uint   `json:"selectedUsers"`
+			SelectedPositions []string `json:"selectedPositions"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -318,17 +363,67 @@ func UpdateCourse(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Begin transaction
+		tx := db.Begin()
+
 		// Update course fields
 		course.Title = req.Title
 		course.Description = req.Description
 		course.Category = req.Category
 		course.Duration = req.Duration
 		course.VideoURL = req.VideoURL
+		course.Visibility = req.Visibility
 
-		if err := db.Save(&course).Error; err != nil {
+		if err := tx.Save(&course).Error; err != nil {
+			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update course"})
 			return
 		}
+
+		// Delete existing course access and positions
+		tx.Exec("DELETE FROM course_access WHERE course_id = ?", course.ID)
+		tx.Exec("DELETE FROM course_positions WHERE course_id = ?", course.ID)
+
+		// Handle course access by specific users
+		if req.Visibility == "specific" && len(req.SelectedUsers) > 0 {
+			for _, userID := range req.SelectedUsers {
+				access := struct {
+					CourseID  uint `gorm:"column:course_id"`
+					UserID    uint `gorm:"column:user_id"`
+					GrantedBy uint `gorm:"column:granted_by"`
+				}{
+					CourseID:  course.ID,
+					UserID:    userID,
+					GrantedBy: course.CreatedBy,
+				}
+				if err := tx.Table("course_access").Create(&access).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set course access"})
+					return
+				}
+			}
+		}
+
+		// Handle course access by position
+		if req.Visibility == "position" && len(req.SelectedPositions) > 0 {
+			for _, position := range req.SelectedPositions {
+				posAccess := struct {
+					CourseID uint   `gorm:"column:course_id"`
+					Position string `gorm:"column:position"`
+				}{
+					CourseID: course.ID,
+					Position: position,
+				}
+				if err := tx.Table("course_positions").Create(&posAccess).Error; err != nil {
+					tx.Rollback()
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set course position access"})
+					return
+				}
+			}
+		}
+
+		// Commit transaction
+		tx.Commit()
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Course updated successfully",
@@ -353,6 +448,39 @@ func DeleteCourse(db *gorm.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Course deleted successfully",
+		})
+	}
+}
+
+// GetCoursePositions handles getting positions that can access a course
+func GetCoursePositions(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		courseID, err := strconv.Atoi(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid course ID"})
+			return
+		}
+
+		var positions []struct {
+			Position string `gorm:"column:position"`
+		}
+
+		if err := db.Table("course_positions").
+			Where("course_id = ?", courseID).
+			Select("position").
+			Find(&positions).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch course positions"})
+			return
+		}
+
+		// Extract position strings
+		positionList := make([]string, len(positions))
+		for i, p := range positions {
+			positionList[i] = p.Position
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"positions": positionList,
 		})
 	}
 }

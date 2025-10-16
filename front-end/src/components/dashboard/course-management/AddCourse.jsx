@@ -17,8 +17,9 @@ function AddCourse() {
     video_url: '', // Changed from videoUrl to video_url to match backend
     instructor: '',
     image: '',
-    visibility: 'all', // 'all' = everyone can see, 'specific' = selected users only
+    visibility: 'all', // 'all' = everyone can see, 'specific' = selected users only, 'position' = by position
     selectedUsers: [], // Array of user IDs who can access this course
+    selectedPositions: [], // Array of positions who can access this course
     quiz: {
       questions: [
         {
@@ -79,6 +80,7 @@ function AddCourse() {
         video_url: newCourse.video_url,
         visibility: newCourse.visibility,
         selectedUsers: newCourse.visibility === 'specific' ? newCourse.selectedUsers : [],
+        selectedPositions: newCourse.visibility === 'position' ? newCourse.selectedPositions : [],
         quiz: newCourse.quiz,
         writtenExam: newCourse.writtenExam
       };
@@ -101,6 +103,7 @@ function AddCourse() {
         image: '',
         visibility: 'all',
         selectedUsers: [],
+        selectedPositions: [],
         quiz: {
           questions: [
             {
@@ -256,7 +259,8 @@ function AddCourse() {
                   setNewCourse({
                     ...newCourse,
                     visibility: e.target.value,
-                    selectedUsers: [] // Reset selected users when changing visibility
+                    selectedUsers: [], // Reset selected users when changing visibility
+                    selectedPositions: [] // Reset selected positions when changing visibility
                   });
                 }}
                 className="w-full p-2 border border-gray-300 rounded-md mb-2"
@@ -264,6 +268,7 @@ function AddCourse() {
               >
                 <option value="all">เปิดให้ทุกคนเห็น</option>
                 <option value="specific">เลือกผู้ใช้เฉพาะ</option>
+                <option value="position">เลือกตามตำแหน่ง</option>
                 <option value="hidden">ซ่อนจากทุกคน</option>
               </select>
 
@@ -318,6 +323,46 @@ function AddCourse() {
                   {newCourse.selectedUsers.length > 0 && (
                     <p className="text-xs text-gray-600 mt-2">
                       เลือกแล้ว: {newCourse.selectedUsers.length} คน
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {newCourse.visibility === 'position' && (
+                <div className="mt-4 space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    เลือกตำแหน่งที่สามารถเห็นคอร์สนี้
+                  </label>
+                  <div className="border border-gray-300 rounded-md p-3 bg-gray-50">
+                    <div className="space-y-2">
+                      {[
+                        { value: 'Manager', label: 'Manager (ผู้จัดการ)', icon: '👔' },
+                        { value: 'Waiter', label: 'Waiter (พนักงานเสิร์ฟ)', icon: '🍽️' },
+                        { value: 'Barista', label: 'Barista (บาริสต้า)', icon: '☕' },
+                        { value: 'Cashier', label: 'Cashier (แคชเชียร์)', icon: '💰' },
+                        { value: 'Service', label: 'Service (พนักงานบริการ)', icon: '🔧' }
+                      ].map((position) => (
+                        <label key={position.value} className="flex items-center space-x-2 p-3 hover:bg-gray-100 rounded cursor-pointer border border-gray-200">
+                          <input
+                            type="checkbox"
+                            checked={newCourse.selectedPositions.includes(position.value)}
+                            onChange={(e) => {
+                              const updatedPositions = e.target.checked
+                                ? [...newCourse.selectedPositions, position.value]
+                                : newCourse.selectedPositions.filter(p => p !== position.value);
+                              setNewCourse({ ...newCourse, selectedPositions: updatedPositions });
+                            }}
+                            className="h-4 w-4 text-blue-600 rounded"
+                          />
+                          <span className="text-xl">{position.icon}</span>
+                          <span className="text-sm text-gray-700 font-medium">{position.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {newCourse.selectedPositions.length > 0 && (
+                    <p className="text-xs text-gray-600 mt-2">
+                      เลือกแล้ว: {newCourse.selectedPositions.length} ตำแหน่ง
                     </p>
                   )}
                 </div>

@@ -591,55 +591,60 @@ function HRDashboard() {
                         </div>
                       </div>
 
-                      {/* All Scores List */}
+                      {/* All Eligible Users List */}
                       <div>
-                        <h3 className="text-lg font-medium mb-3">รายชื่อทั้งหมด</h3>
+                        <h3 className="text-lg font-medium mb-3">รายชื่อพนักงานที่สามารถทำ Course นี้ได้</h3>
                         <div className="overflow-x-auto">
                           <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                               <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  ชื่อผู้เรียน
+                                  ชื่อพนักงาน
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  ชื่อแบบทดสอบ
+                                  ตำแหน่ง
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  คะแนน
-                                </th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  วันที่ทำ
+                                  สถานะ
                                 </th>
                               </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                              {courseStats.all_scores.map((score, idx) => (
-                                <tr key={idx} className="hover:bg-gray-50">
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {score.user_name}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {score.exam_title}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                    <span className={`inline-flex px-3 py-1 rounded-full font-semibold ${score.score >= 80 ? 'bg-green-100 text-green-800' :
-                                      score.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
-                                        'bg-red-100 text-red-800'
-                                      }`}>
-                                      {score.score.toFixed(1)}%
-                                    </span>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {new Date(score.created_at).toLocaleDateString('th-TH', {
-                                      year: 'numeric',
-                                      month: 'short',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
+                              {courseStats.eligible_users && courseStats.eligible_users.length > 0 ? (
+                                courseStats.eligible_users.map((user, idx) => (
+                                  <tr key={idx} className="hover:bg-gray-50">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                      {user.user_name}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                      {user.position || '-'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                      {user.completed ? (
+                                        <span className="inline-flex items-center px-3 py-1 rounded-full font-semibold bg-green-100 text-green-800">
+                                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                          </svg>
+                                          ทำเสร็จแล้ว
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center px-3 py-1 rounded-full font-semibold bg-yellow-100 text-yellow-800">
+                                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                          </svg>
+                                          ยังไม่ได้ทำ
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan="3" className="px-6 py-8 text-center text-gray-500">
+                                    ไม่มีพนักงานที่สามารถเข้าถึง Course นี้ได้
                                   </td>
                                 </tr>
-                              ))}
+                              )}
                             </tbody>
                           </table>
                         </div>

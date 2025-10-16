@@ -195,6 +195,9 @@ function ManageUsers() {
                                         อีเมล
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        บทบาท
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         ตำแหน่ง
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -208,7 +211,7 @@ function ManageUsers() {
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredUsers.length === 0 ? (
                                     <tr>
-                                        <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                                        <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
                                             <div className="flex flex-col items-center">
                                                 <svg
                                                     className="h-12 w-12 text-gray-400 mb-4"
@@ -253,6 +256,11 @@ function ManageUsers() {
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getRoleBadgeColor(user.role)}`}>
                                                     {getRoleLabel(user.role)}
                                                 </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-sm text-gray-900">
+                                                    {user.position || '-'}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                 {user.created_at ? new Date(user.created_at).toLocaleDateString('th-TH') : '-'}

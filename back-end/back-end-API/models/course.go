@@ -11,14 +11,12 @@ type Course struct {
 	Description string    `json:"description"`
 	Category    string    `json:"category"`
 	Duration    int       `json:"duration"` // in minutes
-	VideoURL    string    `json:"video_url"`
-	CreatedBy   uint      `json:"created_by"` // User ID who created the course
+	VideoURL    string    `json:"video_url" gorm:"column:video_url"`
+	Visibility  string    `json:"visibility" gorm:"default:'all'"` // 'all', 'specific', 'position', 'hidden'
+	CreatedBy   uint      `json:"created_by"`
+	Creator     *User     `json:"creator,omitempty" gorm:"foreignKey:CreatedBy"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
-	
-	// Relations
-	Creator     User      `json:"creator" gorm:"foreignKey:CreatedBy"`
 }
 
 type CourseProgress struct {

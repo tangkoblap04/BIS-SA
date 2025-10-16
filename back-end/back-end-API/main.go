@@ -781,6 +781,39 @@ func main() {
 			})
 		})
 
+		// Get course positions
+		api.GET("/courses/:id/positions", func(c *gin.Context) {
+			courseID := c.Param("id")
+
+			query := `
+				SELECT position
+				FROM course_positions
+				WHERE course_id = $1
+				ORDER BY position`
+
+			rows, err := db.Query(query, courseID)
+			if err != nil {
+				log.Printf("Failed to fetch course positions: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch course positions"})
+				return
+			}
+			defer rows.Close()
+
+			var positions []string
+			for rows.Next() {
+				var position string
+				if err := rows.Scan(&position); err != nil {
+					log.Printf("Failed to scan course position: %v", err)
+					continue
+				}
+				positions = append(positions, position)
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"positions": positions,
+			})
+		})
+
 		// Update course endpoint
 		api.PUT("/courses/:id", func(c *gin.Context) {
 			id := c.Param("id")
@@ -1155,6 +1188,50 @@ func main() {
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save exam result"})
 				return
+			}
+
+			// Update course progress to 100% when exam is completed
+			// Check if both multiple choice and written exams exist for this course
+			var examCount int
+			err = db.QueryRow(`
+				SELECT COUNT(*) FROM exams 
+				WHERE course_id = $1 AND deleted_at IS NULL
+			`, examResult.CourseID).Scan(&examCount)
+
+			if err == nil {
+				// Check how many exams this user has completed
+				var completedExams int
+				err = db.QueryRow(`
+					SELECT COUNT(DISTINCT exam_id) FROM exam_results 
+					WHERE user_id = $1 AND course_id = $2
+				`, examResult.UserID, examResult.CourseID).Scan(&completedExams)
+
+				if err == nil {
+					// If user completed all exams, set progress to 100%
+					progress := 100.0
+					if completedExams < examCount {
+						// Calculate progress based on completed exams
+						progress = (float64(completedExams) / float64(examCount)) * 100.0
+					}
+
+					// Update or insert course progress
+					_, err = db.Exec(`
+						INSERT INTO course_progress (user_id, course_id, progress, updated_at, completed_at)
+						VALUES ($1, $2, $3, NOW(), CASE WHEN $3 >= 100 THEN NOW() ELSE NULL END)
+						ON CONFLICT (user_id, course_id)
+						DO UPDATE SET 
+							progress = $3,
+							updated_at = NOW(),
+							completed_at = CASE WHEN $3 >= 100 THEN NOW() ELSE course_progress.completed_at END
+					`, examResult.UserID, examResult.CourseID, progress)
+
+					if err != nil {
+						log.Printf("Warning: Failed to update course progress: %v", err)
+					} else {
+						log.Printf("Updated course progress for user %d, course %d: %.1f%%", 
+							examResult.UserID, examResult.CourseID, progress)
+					}
+				}
 			}
 
 			c.JSON(http.StatusOK, gin.H{
@@ -1701,12 +1778,102 @@ func main() {
 		api.GET("/hr/course-stats/:courseId", func(c *gin.Context) {
 			courseID := c.Param("courseId")
 
-			// Get course info
-			var courseTitle string
-			err := db.QueryRow("SELECT title FROM courses WHERE id = $1", courseID).Scan(&courseTitle)
+			// Get course info and visibility
+			var courseTitle, visibility string
+			err := db.QueryRow("SELECT title, visibility FROM courses WHERE id = $1", courseID).Scan(&courseTitle, &visibility)
 			if err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
 				return
+			}
+
+			// Get all employees who can access this course based on visibility
+			var eligibleUsers []map[string]interface{}
+			
+			switch visibility {
+			case "all":
+				// All employees can access
+				query := `SELECT id, name, position FROM users WHERE role = 'employee' ORDER BY name`
+				rows, err := db.Query(query)
+				if err == nil {
+					defer rows.Close()
+					for rows.Next() {
+						var userID int
+						var userName string
+						var position sql.NullString
+						if err := rows.Scan(&userID, &userName, &position); err == nil {
+							eligibleUsers = append(eligibleUsers, map[string]interface{}{
+								"user_id":  userID,
+								"user_name": userName,
+								"position": position.String,
+							})
+						}
+					}
+				}
+			case "specific":
+				// Only specific users can access
+				query := `
+					SELECT u.id, u.name, u.position 
+					FROM users u
+					JOIN course_access ca ON u.id = ca.user_id
+					WHERE ca.course_id = $1 AND u.role = 'employee'
+					ORDER BY u.name`
+				rows, err := db.Query(query, courseID)
+				if err == nil {
+					defer rows.Close()
+					for rows.Next() {
+						var userID int
+						var userName string
+						var position sql.NullString
+						if err := rows.Scan(&userID, &userName, &position); err == nil {
+							eligibleUsers = append(eligibleUsers, map[string]interface{}{
+								"user_id":  userID,
+								"user_name": userName,
+								"position": position.String,
+							})
+						}
+					}
+				}
+			case "position":
+				// Only users with specific positions can access
+				query := `
+					SELECT DISTINCT u.id, u.name, u.position 
+					FROM users u
+					JOIN course_positions cp ON u.position = cp.position
+					WHERE cp.course_id = $1 AND u.role = 'employee'
+					ORDER BY u.name`
+				rows, err := db.Query(query, courseID)
+				if err == nil {
+					defer rows.Close()
+					for rows.Next() {
+						var userID int
+						var userName string
+						var position sql.NullString
+						if err := rows.Scan(&userID, &userName, &position); err == nil {
+							eligibleUsers = append(eligibleUsers, map[string]interface{}{
+								"user_id":  userID,
+								"user_name": userName,
+								"position": position.String,
+							})
+						}
+					}
+				}
+			}
+
+			// Get completion status for eligible users
+			completionStatus := make(map[int]bool)
+			completionQuery := `
+				SELECT user_id 
+				FROM course_progress 
+				WHERE course_id = $1 AND progress >= 100`
+			rows, err := db.Query(completionQuery, courseID)
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var userID int
+					if err := rows.Scan(&userID); err == nil {
+						completionStatus[userID] = true
+					}
+				}
 			}
 
 			// Get all exam results for this course with user details
@@ -1726,26 +1893,26 @@ func main() {
 				ORDER BY er.score DESC
 			`
 
-			rows, err := db.Query(query, courseID)
+			examRows, err := db.Query(query, courseID)
 			if err != nil {
 				log.Printf("Error fetching course stats: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch course statistics"})
 				return
 			}
-			defer rows.Close()
+			defer examRows.Close()
 
 			var allScores []map[string]interface{}
 			var scores []float64
 			scoresByUser := make(map[int][]map[string]interface{})
 
-			for rows.Next() {
+			for examRows.Next() {
 				var userID int
 				var userName string
 				var score float64
 				var examTitle string
 				var createdAt time.Time
 
-				if err := rows.Scan(&userID, &userName, &score, &examTitle, &createdAt); err != nil {
+				if err := examRows.Scan(&userID, &userName, &score, &examTitle, &createdAt); err != nil {
 					log.Printf("Error scanning row: %v", err)
 					continue
 				}
@@ -1766,6 +1933,18 @@ func main() {
 					scoresByUser[userID] = []map[string]interface{}{}
 				}
 				scoresByUser[userID] = append(scoresByUser[userID], scoreData)
+			}
+			
+			// Build eligible users list with completion status
+			var eligibleUsersList []map[string]interface{}
+			for _, user := range eligibleUsers {
+				userID := user["user_id"].(int)
+				eligibleUsersList = append(eligibleUsersList, map[string]interface{}{
+					"user_id":   userID,
+					"user_name": user["user_name"],
+					"position":  user["position"],
+					"completed": completionStatus[userID],
+				})
 			}
 
 			// Calculate statistics
@@ -1855,6 +2034,7 @@ func main() {
 			c.JSON(http.StatusOK, gin.H{
 				"course_id":    courseID,
 				"course_title": courseTitle,
+				"visibility":   visibility,
 				"statistics": map[string]interface{}{
 					"max_score":       maxScore,
 					"min_score":       minScore,
@@ -1863,8 +2043,9 @@ func main() {
 					"max_score_users": maxScoreUsers,
 					"min_score_users": minScoreUsers,
 				},
-				"all_scores":   allScores,
-				"distribution": distribution,
+				"all_scores":      allScores,
+				"distribution":    distribution,
+				"eligible_users":  eligibleUsersList,
 			})
 		})
 

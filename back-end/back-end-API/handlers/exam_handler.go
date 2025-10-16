@@ -204,9 +204,58 @@ func SubmitExamResult(c *gin.Context) {
 		return
 	}
 
+	// ตรวจสอบว่ามี exam อีกกี่ตัวใน course นี้
+	var totalExams int
+	err = db.QueryRow(`
+		SELECT COUNT(*) FROM exams 
+		WHERE course_id = $1 AND deleted_at IS NULL
+	`, examResult.CourseID).Scan(&totalExams)
+	
+	if err != nil {
+		totalExams = 2 // default ถ้า error
+	}
+
+	// นับจำนวน exam ที่ user ทำไปแล้วสำหรับ course นี้
+	var completedExams int
+	err = db.QueryRow(`
+		SELECT COUNT(DISTINCT exam_id) FROM exam_results 
+		WHERE user_id = $1 AND course_id = $2
+	`, examResult.UserID, examResult.CourseID).Scan(&completedExams)
+	
+	if err != nil {
+		completedExams = 0
+	}
+
+	// คำนวณ progress (สมมติว่าต้องทำ video + exams)
+	// ถ้าทำครบทุก exam ให้ progress = 100%
+	progress := 100.0
+	if completedExams < totalExams {
+		// ยังทำไม่ครบ ให้ progress based on จำนวน exam ที่ทำแล้ว
+		progress = float64(completedExams) / float64(totalExams) * 100.0
+	}
+
+	// อัปเดต progress ใน course_progress หรือสร้างใหม่ถ้ายังไม่มี
+	_, err = db.Exec(`
+		INSERT INTO course_progress (user_id, course_id, progress, updated_at, completed_at)
+		VALUES ($1, $2, $3, NOW(), CASE WHEN $3 >= 100 THEN NOW() ELSE NULL END)
+		ON CONFLICT (user_id, course_id) 
+		DO UPDATE SET 
+			progress = $3,
+			updated_at = NOW(),
+			completed_at = CASE WHEN $3 >= 100 THEN NOW() ELSE course_progress.completed_at END
+	`, examResult.UserID, examResult.CourseID, progress)
+
+	if err != nil {
+		// Log error but don't fail the request
+		println("Warning: Failed to update progress:", err.Error())
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Exam submitted successfully",
 		"result_id": resultID,
 		"score": score,
+		"progress": progress,
+		"completed_exams": completedExams,
+		"total_exams": totalExams,
 	})
 }

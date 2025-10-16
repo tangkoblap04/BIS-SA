@@ -8,7 +8,8 @@ export default function AddUser() {
         name: '',
         email: '',
         password: '',
-        role: 'employee'
+        role: 'employee',
+        position: ''
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -44,7 +45,8 @@ export default function AddUser() {
                 name: '',
                 email: '',
                 password: '',
-                role: 'employee'
+                role: 'employee',
+                position: ''
             });
 
             setTimeout(() => setSuccess(false), 3000);
@@ -136,6 +138,35 @@ export default function AddUser() {
                         </select>
                     </div>
 
+                    <div>
+                        <label htmlFor="position" className="block text-sm font-medium text-gray-700 mb-2">
+                            ตำแหน่ง
+                            {formData.role === 'employee' && <span className="text-red-500 ml-1">*</span>}
+                        </label>
+                        <select
+                            id="position"
+                            name="position"
+                            required={formData.role === 'employee'}
+                            value={formData.position}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            disabled={formData.role === 'HR'}
+                        >
+                            <option value="">-- เลือกตำแหน่ง --</option>
+                            <option value="Manager">Manager (ผู้จัดการ)</option>
+                            <option value="Waiter">Waiter (พนักงานเสิร์ฟ)</option>
+                            <option value="Barista">Barista (บาริสต้า)</option>
+                            <option value="Cashier">Cashier (แคชเชียร์)</option>
+                            <option value="Service">Service (พนักงานบริการ)</option>
+                        </select>
+                        {formData.role === 'employee' && (
+                            <p className="mt-1 text-xs text-gray-500">เลือกตำแหน่งงานของพนักงาน</p>
+                        )}
+                        {formData.role === 'HR' && (
+                            <p className="mt-1 text-xs text-gray-500">HR ไม่ต้องระบุตำแหน่ง</p>
+                        )}
+                    </div>
+
                     {error && (
                         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
                             <div className="flex items-center">
@@ -162,11 +193,10 @@ export default function AddUser() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className={`w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md font-medium text-white ${
-                                loading 
-                                    ? 'bg-blue-400 cursor-not-allowed' 
-                                    : 'bg-blue-600 hover:bg-blue-700'
-                            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors`}
+                            className={`w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md font-medium text-white ${loading
+                                ? 'bg-blue-400 cursor-not-allowed'
+                                : 'bg-blue-600 hover:bg-blue-700'
+                                } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors`}
                         >
                             {loading ? (
                                 <>

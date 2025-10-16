@@ -4,6 +4,7 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
     role VARCHAR(50) NOT NULL CHECK (role IN ('HR', 'employee')),
+    position VARCHAR(50) CHECK (position IN ('Manager', 'Waiter', 'Barista', 'Cashier', 'Service')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -15,7 +16,7 @@ CREATE TABLE courses (
     category VARCHAR(100),
     duration INTEGER DEFAULT 0, -- duration in minutes
     video_url TEXT,
-    visibility VARCHAR(50) DEFAULT 'all' CHECK (visibility IN ('all', 'specific', 'hidden')), -- 'all' = everyone, 'specific' = selected users only, 'hidden' = no one can see
+    visibility VARCHAR(50) DEFAULT 'all' CHECK (visibility IN ('all', 'specific', 'position', 'hidden')), -- 'all' = everyone, 'specific' = selected users only, 'position' = by position, 'hidden' = no one can see
     created_by INTEGER REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -76,4 +77,13 @@ CREATE TABLE course_access (
     granted_by INTEGER REFERENCES users(id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(course_id, user_id)
+);
+
+-- Table for managing course access by position
+CREATE TABLE course_positions (
+    id SERIAL PRIMARY KEY,
+    course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+    position VARCHAR(50) NOT NULL CHECK (position IN ('Manager', 'Waiter', 'Barista', 'Cashier', 'Service')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(course_id, position)
 );

@@ -47,7 +47,6 @@ function CourseDetailPage() {
   }, [courseId]);
 
   const handleQuizComplete = (quizResult) => {
-    // TODO: ส่งผลสอบไป API
     console.log('Quiz completed:', quizResult);
 
     // บันทึกผลสอบลง localStorage (ชั่วคราว)
@@ -58,14 +57,11 @@ function CourseDetailPage() {
     });
     localStorage.setItem('quizResults', JSON.stringify(results));
 
-    // ตรวจสอบว่าต้องไปทำข้อสอบเขียนหรือไม่
-    if (quizResult.goToWrittenExam) {
-      setIsQuizCompleted(true);
-    }
+    // แสดง Written Exam ต่อเสมอ (เพราะทุก course ต้องมีทั้ง Quiz และ Written Exam)
+    setIsQuizCompleted(true);
   };
 
   const handleWrittenExamComplete = (examResult) => {
-    // TODO: ส่งผลสอบเขียนไป API
     console.log('Written Exam completed:', examResult);
 
     // บันทึกผลสอบเขียนลง localStorage (ชั่วคราว)
@@ -77,9 +73,12 @@ function CourseDetailPage() {
     localStorage.setItem('writtenExamResults', JSON.stringify(results));
 
     alert('ยินดีด้วย! คุณได้ทำการเรียนครบหลักสูตรแล้ว');
-  };
 
-  const handleBackToCourses = () => {
+    // นำทางกลับไปที่ Employee Dashboard เพื่ออัปเดตข้อมูล
+    setTimeout(() => {
+      navigate('/dashboard');
+    }, 1000);
+  }; const handleBackToCourses = () => {
     navigate('/courses');
   };
 

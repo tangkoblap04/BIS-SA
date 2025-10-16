@@ -5,48 +5,6 @@ import { courseService } from '../../services/course.service';
 import { dashboardService } from '../../services/dashboard.service';
 import { Link } from 'react-router-dom';
 
-// Mock data
-const mockTrainingData = {
-  userInfo: {
-    name: 'คุณสมชาย ใจดี',
-    position: 'พนักงานเสิร์ฟ',
-    imageUrl: '/images/waiter.png',
-    currentCourse: {
-      name: 'การบริการลูกค้าเบื้องต้น',
-      progress: 65
-    }
-  },
-  // Example:
-  totalHours: 24,
-  completedHours: 16,
-  courses: [
-    {
-      id: 1,
-      name: 'การบริการลูกค้าเบื้องต้น',
-      totalModules: 5,
-      completedModules: 5,
-      duration: 8,
-      progress: 100
-    },
-    {
-      id: 2,
-      name: 'การจัดการข้อร้องเรียน',
-      totalModules: 4,
-      completedModules: 2,
-      duration: 8,
-      progress: 50
-    },
-    {
-      id: 3,
-      name: 'การทำงานเป็นทีม',
-      totalModules: 6,
-      completedModules: 3,
-      duration: 8,
-      progress: 30
-    }
-  ]
-};
-
 function EmployeeDashboard() {
   const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState(null);
@@ -59,18 +17,66 @@ function EmployeeDashboard() {
     }
   }, [user]);
 
+  // Refresh data when component becomes visible (user returns to dashboard)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && user && user.id) {
+        console.log('Dashboard visible - refreshing data');
+        fetchDashboardData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user]);
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       setError(null);
 
       const data = await dashboardService.getDashboardData(user.id);
-      setDashboardData(dashboardService.formatDashboardData(data));
+      console.log('Dashboard API response:', data); // Debug log
+
+      // Format the data properly
+      const formattedData = {
+        user: data.user || {
+          id: user.id,
+          name: user.name || 'พนักงาน',
+          role: user.role || 'employee'
+        },
+        stats: data.stats || {
+          total_courses: 0,
+          completed_courses: 0,
+          in_progress_courses: 0,
+          total_hours: 0,
+          completed_hours: 0
+        },
+        courses: (data.courses || []).map(course => ({
+          id: course.id,
+          name: course.title || course.name,
+          title: course.title || course.name,
+          category: course.category || 'ทั่วไป',
+          duration: course.duration || 0,
+          description: course.description || '',
+          progress: course.progress || 0,
+          completed_at: course.completed_at,
+          creator_name: course.creator_name
+        })),
+        recentExams: data.recent_exams || [],
+        weeklyProgress: data.weekly_progress || [],
+        achievements: data.achievements || []
+      };
+
+      setDashboardData(formattedData);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
       setError(error.message);
 
-      // Fallback to mock data if API fails
+      // Set empty data instead of fallback to mock
       setDashboardData({
         user: {
           id: user.id,
@@ -78,32 +84,16 @@ function EmployeeDashboard() {
           role: user.role || 'employee'
         },
         stats: {
-          total_courses: mockTrainingData.courses.length,
-          completed_courses: mockTrainingData.courses.filter(c => c.progress === 100).length,
-          in_progress_courses: mockTrainingData.courses.filter(c => c.progress > 0 && c.progress < 100).length,
-          total_hours: mockTrainingData.totalHours,
-          completed_hours: mockTrainingData.completedHours
+          total_courses: 0,
+          completed_courses: 0,
+          in_progress_courses: 0,
+          total_hours: 0,
+          completed_hours: 0
         },
-        courses: mockTrainingData.courses,
+        courses: [],
         recentExams: [],
-        weeklyProgress: [
-          { day: 'จ', hours: 2 },
-          { day: 'อ', hours: 1.5 },
-          { day: 'พ', hours: 3 },
-          { day: 'พฤ', hours: 2.5 },
-          { day: 'ศ', hours: 1 },
-          { day: 'ส', hours: 0 },
-          { day: 'อา', hours: 2 }
-        ],
-        achievements: [
-          {
-            id: 1,
-            title: 'นักเรียนใหม่',
-            description: 'เริ่มต้นการเรียนรู้แล้ว',
-            icon: '🎓',
-            type: 'start'
-          }
-        ]
+        weeklyProgress: [],
+        achievements: []
       });
     } finally {
       setLoading(false);
@@ -196,6 +186,17 @@ function EmployeeDashboard() {
               </div>
             </div>
             <div className="text-right">
+              <button
+                onClick={fetchDashboardData}
+                disabled={loading}
+                className="mb-2 inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-100 bg-white/20 rounded-lg hover:bg-white/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="รีเฟรชข้อมูล"
+              >
+                <svg className={`w-4 h-4 mr-1.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {loading ? 'กำลังโหลด...' : 'รีเฟรช'}
+              </button>
               <p className="text-blue-100 text-sm">วันที่</p>
               <p className="text-xl font-semibold">
                 {new Date().toLocaleDateString('th-TH', {
@@ -415,6 +416,36 @@ function EmployeeDashboard() {
                 )}
               </div>
             </div>
+
+            {/* Recent Exam Scores */}
+            {dashboardData && dashboardData.recentExams && dashboardData.recentExams.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">คะแนนสอบล่าสุด</h3>
+                <div className="space-y-3">
+                  {dashboardData.recentExams.map((exam, index) => (
+                    <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-gray-700">{exam.course_title}</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${exam.score >= 80 ? 'bg-green-100 text-green-800' :
+                          exam.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                          {exam.score.toFixed(1)}%
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">{exam.exam_title}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(exam.created_at).toLocaleDateString('th-TH', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Quick Actions */}
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
