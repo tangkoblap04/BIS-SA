@@ -48,11 +48,53 @@ function HRDashboard() {
   });
   const [courseProgress, setCourseProgress] = useState([]);
 
+  // New states for course statistics
+  const [selectedCourse, setSelectedCourse] = useState('');
+  const [courseList, setCourseList] = useState([]);
+  const [courseStats, setCourseStats] = useState(null);
+  const [loadingCourseStats, setLoadingCourseStats] = useState(false);
+
   useEffect(() => {
     if (activeTab === 'dashboard') {
       fetchDashboardData();
+      fetchCourseList();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (selectedCourse) {
+      fetchCourseStats(selectedCourse);
+    }
+  }, [selectedCourse]);
+
+  const fetchCourseList = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/courses');
+      const data = await response.json();
+      setCourseList(data.courses || []);
+
+      // Auto-select first course if available
+      if (data.courses && data.courses.length > 0) {
+        setSelectedCourse(data.courses[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+    }
+  };
+
+  const fetchCourseStats = async (courseId) => {
+    try {
+      setLoadingCourseStats(true);
+      const response = await fetch(`http://localhost:8080/api/hr/course-stats/${courseId}`);
+      const data = await response.json();
+      setCourseStats(data);
+    } catch (error) {
+      console.error('Error fetching course stats:', error);
+      setCourseStats(null);
+    } finally {
+      setLoadingCourseStats(false);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -379,7 +421,7 @@ function HRDashboard() {
                 </div>
 
                 {/* Course Progress */}
-                <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                   <h2 className="text-xl font-semibold mb-4">Course Progress Overview</h2>
                   {courseProgress.length > 0 ? (
                     <>
@@ -428,6 +470,192 @@ function HRDashboard() {
                       </svg>
                       <p className="mt-2 font-medium">ยังไม่มีข้อมูลความก้าวหน้าคอร์ส</p>
                       <p className="text-sm mt-1">เมื่อมีพนักงานเรียนคอร์สจะแสดงข้อมูลที่นี่</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Course Statistics Section */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-semibold">คะแนนแยกตามคอร์ส</h2>
+                    <select
+                      value={selectedCourse}
+                      onChange={(e) => setSelectedCourse(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">เลือกคอร์ส</option>
+                      {courseList.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {course.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {loadingCourseStats ? (
+                    <div className="flex justify-center items-center py-12">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : courseStats && courseStats.statistics.total_scores > 0 ? (
+                    <>
+                      {/* Statistics Cards */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                          <p className="text-sm text-green-600 font-medium mb-2">คะแนนสูงสุด</p>
+                          <p className="text-3xl font-bold text-green-700 mb-2">
+                            {courseStats.statistics.max_score.toFixed(1)}%
+                          </p>
+                          <div className="text-sm text-gray-600">
+                            {courseStats.statistics.max_score_users.map((user, idx) => (
+                              <div key={idx} className="flex items-center gap-2 mb-1">
+                                <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                                <span>{user.user_name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                          <p className="text-sm text-blue-600 font-medium mb-2">คะแนนเฉลี่ย</p>
+                          <p className="text-3xl font-bold text-blue-700 mb-2">
+                            {courseStats.statistics.avg_score.toFixed(1)}%
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            จากการทำแบบทดสอบ {courseStats.statistics.total_scores} ครั้ง
+                          </p>
+                        </div>
+
+                        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                          <p className="text-sm text-red-600 font-medium mb-2">คะแนนต่ำสุด</p>
+                          <p className="text-3xl font-bold text-red-700 mb-2">
+                            {courseStats.statistics.min_score.toFixed(1)}%
+                          </p>
+                          <div className="text-sm text-gray-600">
+                            {courseStats.statistics.min_score_users.map((user, idx) => (
+                              <div key={idx} className="flex items-center gap-2 mb-1">
+                                <span className="inline-block w-2 h-2 bg-red-500 rounded-full"></span>
+                                <span>{user.user_name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bar Chart - Score Distribution */}
+                      <div className="mb-6">
+                        <h3 className="text-lg font-medium mb-3">การกระจายของคะแนน</h3>
+                        <div className="h-80">
+                          <Bar
+                            data={{
+                              labels: courseStats.distribution.map(d => d.range),
+                              datasets: [{
+                                label: 'จำนวนคน',
+                                data: courseStats.distribution.map(d => d.count),
+                                backgroundColor: 'rgba(79, 70, 229, 0.8)',
+                                borderColor: 'rgba(79, 70, 229, 1)',
+                                borderWidth: 1,
+                              }]
+                            }}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              scales: {
+                                y: {
+                                  beginAtZero: true,
+                                  ticks: {
+                                    stepSize: 1
+                                  },
+                                  title: {
+                                    display: true,
+                                    text: 'จำนวนคน'
+                                  }
+                                },
+                                x: {
+                                  title: {
+                                    display: true,
+                                    text: 'ช่วงคะแนน (%)'
+                                  }
+                                }
+                              },
+                              plugins: {
+                                legend: {
+                                  display: true,
+                                  position: 'top',
+                                },
+                                title: {
+                                  display: false
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* All Scores List */}
+                      <div>
+                        <h3 className="text-lg font-medium mb-3">รายชื่อทั้งหมด</h3>
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  ชื่อผู้เรียน
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  ชื่อแบบทดสอบ
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  คะแนน
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  วันที่ทำ
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {courseStats.all_scores.map((score, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    {score.user_name}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {score.exam_title}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span className={`inline-flex px-3 py-1 rounded-full font-semibold ${score.score >= 80 ? 'bg-green-100 text-green-800' :
+                                      score.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                                        'bg-red-100 text-red-800'
+                                      }`}>
+                                      {score.score.toFixed(1)}%
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {new Date(score.created_at).toLocaleDateString('th-TH', {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    })}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
+                  ) : selectedCourse ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <p className="mt-2 font-medium">ยังไม่มีข้อมูลคะแนนสำหรับคอร์สนี้</p>
+                      <p className="text-sm mt-1">เมื่อมีพนักงานทำแบบทดสอบจะแสดงข้อมูลที่นี่</p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-gray-500">
+                      <p className="font-medium">กรุณาเลือกคอร์สเพื่อดูสถิติ</p>
                     </div>
                   )}
                 </div>

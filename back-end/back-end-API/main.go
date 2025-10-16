@@ -73,6 +73,9 @@ func main() {
 	initDB()
 	defer db.Close()
 
+	// Seed data on startup
+	seedData(db)
+
 	r := gin.Default()
 
 	// CORS configuration
@@ -1691,6 +1694,177 @@ func main() {
 					"score_count": scoreCount,
 				},
 				"course_progress": courseProgress,
+			})
+		})
+
+		// Get course statistics for a specific course
+		api.GET("/hr/course-stats/:courseId", func(c *gin.Context) {
+			courseID := c.Param("courseId")
+
+			// Get course info
+			var courseTitle string
+			err := db.QueryRow("SELECT title FROM courses WHERE id = $1", courseID).Scan(&courseTitle)
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+				return
+			}
+
+			// Get all exam results for this course with user details
+			query := `
+				SELECT 
+					er.user_id,
+					u.name as user_name,
+					er.score,
+					e.title as exam_title,
+					er.created_at
+				FROM exam_results er
+				JOIN users u ON er.user_id = u.id
+				JOIN exams e ON er.exam_id = e.id
+				WHERE er.course_id = $1 
+					AND e.type = 'multiple_choice'
+					AND e.deleted_at IS NULL
+				ORDER BY er.score DESC
+			`
+
+			rows, err := db.Query(query, courseID)
+			if err != nil {
+				log.Printf("Error fetching course stats: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch course statistics"})
+				return
+			}
+			defer rows.Close()
+
+			var allScores []map[string]interface{}
+			var scores []float64
+			scoresByUser := make(map[int][]map[string]interface{})
+
+			for rows.Next() {
+				var userID int
+				var userName string
+				var score float64
+				var examTitle string
+				var createdAt time.Time
+
+				if err := rows.Scan(&userID, &userName, &score, &examTitle, &createdAt); err != nil {
+					log.Printf("Error scanning row: %v", err)
+					continue
+				}
+
+				scoreData := map[string]interface{}{
+					"user_id":    userID,
+					"user_name":  userName,
+					"score":      score,
+					"exam_title": examTitle,
+					"created_at": createdAt,
+				}
+
+				allScores = append(allScores, scoreData)
+				scores = append(scores, score)
+
+				// Group scores by user
+				if _, exists := scoresByUser[userID]; !exists {
+					scoresByUser[userID] = []map[string]interface{}{}
+				}
+				scoresByUser[userID] = append(scoresByUser[userID], scoreData)
+			}
+
+			// Calculate statistics
+			var maxScore, minScore, avgScore float64
+			var maxScoreUsers, minScoreUsers []map[string]interface{}
+
+			if len(scores) > 0 {
+				maxScore = scores[0]
+				minScore = scores[0]
+				sum := 0.0
+
+				for _, score := range scores {
+					sum += score
+					if score > maxScore {
+						maxScore = score
+					}
+					if score < minScore {
+						minScore = score
+					}
+				}
+				avgScore = sum / float64(len(scores))
+
+				// Find users with max and min scores
+				for _, scoreData := range allScores {
+					score := scoreData["score"].(float64)
+					if score == maxScore {
+						maxScoreUsers = append(maxScoreUsers, map[string]interface{}{
+							"user_id":    scoreData["user_id"],
+							"user_name":  scoreData["user_name"],
+							"score":      score,
+							"exam_title": scoreData["exam_title"],
+							"created_at": scoreData["created_at"],
+						})
+					}
+					if score == minScore {
+						minScoreUsers = append(minScoreUsers, map[string]interface{}{
+							"user_id":    scoreData["user_id"],
+							"user_name":  scoreData["user_name"],
+							"score":      score,
+							"exam_title": scoreData["exam_title"],
+							"created_at": scoreData["created_at"],
+						})
+					}
+				}
+			}
+
+			// Get score distribution for bar chart (0-10, 11-20, ..., 91-100)
+			scoreRanges := make(map[string]int)
+			rangeLabels := []string{"0-10", "11-20", "21-30", "31-40", "41-50", "51-60", "61-70", "71-80", "81-90", "91-100"}
+			for _, label := range rangeLabels {
+				scoreRanges[label] = 0
+			}
+
+			for _, score := range scores {
+				if score <= 10 {
+					scoreRanges["0-10"]++
+				} else if score <= 20 {
+					scoreRanges["11-20"]++
+				} else if score <= 30 {
+					scoreRanges["21-30"]++
+				} else if score <= 40 {
+					scoreRanges["31-40"]++
+				} else if score <= 50 {
+					scoreRanges["41-50"]++
+				} else if score <= 60 {
+					scoreRanges["51-60"]++
+				} else if score <= 70 {
+					scoreRanges["61-70"]++
+				} else if score <= 80 {
+					scoreRanges["71-80"]++
+				} else if score <= 90 {
+					scoreRanges["81-90"]++
+				} else {
+					scoreRanges["91-100"]++
+				}
+			}
+
+			// Convert to array for frontend
+			var distribution []map[string]interface{}
+			for _, label := range rangeLabels {
+				distribution = append(distribution, map[string]interface{}{
+					"range": label,
+					"count": scoreRanges[label],
+				})
+			}
+
+			c.JSON(http.StatusOK, gin.H{
+				"course_id":    courseID,
+				"course_title": courseTitle,
+				"statistics": map[string]interface{}{
+					"max_score":       maxScore,
+					"min_score":       minScore,
+					"avg_score":       avgScore,
+					"total_scores":    len(scores),
+					"max_score_users": maxScoreUsers,
+					"min_score_users": minScoreUsers,
+				},
+				"all_scores":   allScores,
+				"distribution": distribution,
 			})
 		})
 
